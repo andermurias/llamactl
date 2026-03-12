@@ -144,6 +144,45 @@ models:
     useModelName: "mlx-community/phi-4-4bit"
     ttl: 600
 
+  # ── Vision · Qwen2.5 VL 7B (image + text → text) ─────────────────────────
+  # Multimodal chat: attach images to any message — OCR, screenshots, charts,
+  # document pages, photo analysis.
+  # llama-server downloads the model (~4.5 GB) AND mmproj automatically from
+  # HuggingFace on first use (stored in ~/.cache/huggingface/).
+  # OpenWebUI: select this model → image upload button appears automatically.
+  qwen2.5-vl-7b:
+    cmd: |
+      llama-server
+      --hf-repo ggml-org/Qwen2.5-VL-7B-Instruct-GGUF:q4_k_m
+      --alias qwen2.5-vl-7b
+      --host 127.0.0.1
+      --port ${PORT}
+      -ngl 99
+      --ctx-size 8192
+      --parallel 1
+    useModelName: "qwen2.5-vl-7b"
+    ttl: 600
+
+  # ── STT — Whisper large-v3-turbo (OpenAI-compatible transcription) ─────────
+  # Metal-accelerated speech-to-text using mlx-whisper.
+  # Model downloads from HuggingFace on first use (~1.6 GB):
+  #   mlx-community/whisper-large-v3-turbo
+  #
+  # Access via llama-swap upstream routing (process managed with idle TTL):
+  #   POST http://localhost:8080/upstream/whisper-stt/v1/audio/transcriptions
+  #
+  # ── OpenWebUI STT configuration ─────────────────────────────────────────
+  # Settings → Audio → Speech to Text:
+  #   Engine:  OpenAI
+  #   API URL: http://<mac-ip>:8080/upstream/whisper-stt/v1
+  #   API Key: local
+  # ────────────────────────────────────────────────────────────────────────
+  whisper-stt:
+    cmd: /Users/andermurias/AI/scripts/start-whisper.sh ${PORT}
+    useModelName: "whisper-stt"
+    checkEndpoint: /health
+    ttl: 300
+
   # ── TTS — Kokoro 82M (OpenAI-compatible /v1/audio/speech) ────────────────
   # MPS-accelerated on Apple Silicon. Model weights already at:
   #   Kokoro-FastAPI/api/src/models/v1_0/

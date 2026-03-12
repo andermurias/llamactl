@@ -4,7 +4,7 @@
 # What this does:
 #   1. Verify macOS + Apple Silicon
 #   2. Install Homebrew packages (miniforge, ffmpeg, espeak-ng, uv)
-#   3. Create conda env 'mlx-server' with mlx-lm (MLX inference)
+#   3. Create conda env 'mlx-server' with mlx-lm + mlx-whisper (MLX inference + STT)
 #   4. Clone Kokoro-FastAPI and install its Python dependencies
 #   5. Download Kokoro TTS model weights
 #   6. Install llama-swap binary (latest release)
@@ -147,15 +147,22 @@ MLX_SERVER_BIN="$MLX_ENV/bin/mlx_lm.server"
 if [[ -f "$MLX_SERVER_BIN" ]]; then
   MLX_VER=$("$MLX_SERVER_BIN" --version 2>/dev/null | head -1 || echo "installed")
   skip "mlx-server env ($MLX_VER)"
+  # Ensure whisper + FastAPI deps exist even in an already-set-up env
+  WHISPER_OK=$("$CONDA_BIN" run -n mlx-server python -c "import mlx_whisper, fastapi" 2>/dev/null && echo "ok" || echo "missing")
+  if [[ "$WHISPER_OK" == "missing" ]]; then
+    info "Installing mlx-whisper + FastAPI into existing env…"
+    "$CONDA_BIN" run -n mlx-server pip install mlx-whisper fastapi "uvicorn[standard]" python-multipart --quiet
+    ok "Whisper + FastAPI deps installed"
+  fi
 else
   if [[ -d "$MLX_ENV" ]]; then
-    info "Environment exists but mlx_lm.server missing — installing mlx-lm…"
-    "$CONDA_BIN" run -n mlx-server pip install mlx-lm --quiet
+    info "Environment exists but mlx_lm.server missing — installing packages…"
+    "$CONDA_BIN" run -n mlx-server pip install mlx-lm mlx-whisper fastapi "uvicorn[standard]" python-multipart --quiet
   else
     info "Creating conda environment 'mlx-server'…"
     "$CONDA_BIN" create -n mlx-server python=3.11 -y
-    info "Installing mlx-lm…"
-    "$CONDA_BIN" run -n mlx-server pip install mlx-lm --quiet
+    info "Installing mlx-lm, mlx-whisper, FastAPI…"
+    "$CONDA_BIN" run -n mlx-server pip install mlx-lm mlx-whisper fastapi "uvicorn[standard]" python-multipart --quiet
   fi
   ok "mlx-server environment ready  ($MLX_SERVER_BIN)"
 fi

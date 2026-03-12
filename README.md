@@ -13,10 +13,12 @@
 | `qwen2.5-coder-14b` | Qwen 2.5 Coder 14B 4-bit (MLX) | Code generation · fill-in-middle | ~8 GB | **16 384** |
 | `qwen2.5-14b` | Qwen 2.5 14B 4-bit (MLX) | Agents · tool-calling · MCP | ~8 GB | **16 384** |
 | `phi-4` | Phi-4 14B 4-bit (MLX) | STEM · reasoning · coding | ~8 GB | **16 384** |
+| `qwen2.5-vl-7b` | Qwen2.5-VL 7B Q4_K_M (GGUF) | **Vision** — images + text → text | ~4.5 GB + mmproj | 8 192 |
 | `nomic-embed-text-v1.5` | nomic-embed-text 1.5 Q8 (GGUF) | Embeddings · RAG · semantic search | ~270 MB | — |
-| `kokoro-tts` | Kokoro v1.0 (MPS) | Text-to-speech · OpenAI-compatible | ~82 MB | — |
+| `whisper-stt` | Whisper large-v3-turbo (MLX) | **Speech-to-text** — transcription | ~1.6 GB | — |
+| `kokoro-tts` | Kokoro v1.0 (MPS) | **Text-to-speech** — OpenAI-compatible | ~82 MB | — |
 
-MLX models download from HuggingFace on first use. GGUF models are downloaded by the installer.
+MLX and vision models download from HuggingFace on first use. GGUF models are downloaded by the installer.
 
 > **Thinking models:** `qwen3.5-9b` uses 32 768 max tokens because the hidden `<think>…</think>` reasoning
 > chain can consume thousands of tokens before the visible answer begins.
@@ -170,10 +172,102 @@ Open `http://localhost:8080` in your browser for a built-in chat UI and model ma
 3. **API Key**: any string (e.g. `local`) — not validated
 4. Save — all models appear automatically
 
-For **embeddings** in RAG pipelines, use the same base URL.  
-For **TTS** (if OpenWebUI supports it), point to the same endpoint with model `kokoro-tts`.
+For **embeddings** in RAG pipelines, use the same base URL.
 
 > **Tip:** Find your Mac's IP with `ipconfig getifaddr en0`
+
+---
+
+## OpenWebUI — Full multimodal setup
+
+### 🗣️ Speech to Text (Whisper)
+
+> Settings → Audio → Speech to Text
+
+| Field | Value |
+|-------|-------|
+| Engine | OpenAI |
+| API URL | `http://<mac-ip>:8080/upstream/whisper-stt/v1` |
+| API Key | `local` |
+
+Whisper loads on the first STT request and unloads after 5 min idle. Model: **Whisper large-v3-turbo** (~1.6 GB, downloads on first use).
+
+### 🔊 Text to Speech (Kokoro)
+
+> Settings → Audio → Text to Speech
+
+| Field | Value |
+|-------|-------|
+| Engine | OpenAI |
+| API URL | `http://<mac-ip>:8080/v1` |
+| API Key | `local` |
+| Model | `kokoro-tts` |
+| Voice | `af_heart` (or any voice from the list in `llama-swap.yaml`) |
+
+### 🖼️ Vision — Images in chat
+
+Select **`qwen2.5-vl-7b`** as the model in OpenWebUI. An image attachment button appears automatically in the message input. You can send:
+- Screenshots → describe / extract text
+- Documents / PDFs (page screenshot) → read and analyse
+- Charts / diagrams → explain
+- Photos → answer questions
+
+Model downloads ~4.5 GB + mmproj on first use. No special OpenWebUI configuration needed beyond selecting the model.
+
+### 🎨 Image Generation (ComfyUI)
+
+Image generation requires **ComfyUI** as a separate service. OpenWebUI has native ComfyUI support.
+
+**1. Install ComfyUI**
+```bash
+git clone https://github.com/comfyanonymous/ComfyUI ~/AI/ComfyUI
+cd ~/AI/ComfyUI
+pip install torch torchvision torchaudio
+pip install -r requirements.txt
+```
+
+**2. Download a model** (pick one based on quality/speed preference)
+
+```bash
+cd ~/AI/ComfyUI/models/checkpoints
+
+# SDXL-Turbo — recommended (fast, 4 steps, good quality, ~7 GB)
+curl -L "https://huggingface.co/stabilityai/sdxl-turbo/resolve/main/sd_xl_turbo_1.0_fp16.safetensors" \
+     -o sd_xl_turbo_1.0_fp16.safetensors
+
+# OR SD 1.5 — lighter (~2 GB, faster but older quality)
+# curl -L "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors" \
+#      -o v1-5-pruned-emaonly.safetensors
+```
+
+**3. Start ComfyUI**
+```bash
+cd ~/AI/ComfyUI
+python main.py --listen 0.0.0.0 --port 8188
+```
+
+**4. Configure OpenWebUI**
+
+> Settings → Images
+
+| Field | Value |
+|-------|-------|
+| Image Generation Engine | ComfyUI |
+| ComfyUI Base URL | `http://<mac-ip>:8188` |
+
+### 📄 Document reading (RAG)
+
+OpenWebUI's built-in RAG pipeline handles document uploads automatically using the embeddings model already configured.
+
+> Settings → Documents
+
+| Field | Value |
+|-------|-------|
+| Embedding Model Engine | OpenAI |
+| Embedding Model API Base URL | `http://<mac-ip>:8080/v1` |
+| Embedding Model | `nomic-embed-text-v1.5` |
+
+Supported formats: PDF, DOCX, TXT, Markdown, HTML, and more. For image-based PDFs or scanned documents, use **`qwen2.5-vl-7b`** and paste a screenshot of the page.
 
 ---
 
@@ -216,7 +310,9 @@ my-new-model:
 │   ├── install.sh           # Interactive first-time installer
 │   ├── install-llama-swap.sh# Standalone llama-swap binary updater
 │   ├── download-models.sh   # Download GGUF models
-│   └── start-kokoro.sh      # TTS server launcher (called by llama-swap)
+│   ├── start-kokoro.sh      # TTS server launcher (called by llama-swap)
+│   ├── start-whisper.sh     # STT server launcher (called by llama-swap)
+│   └── whisper_server.py    # OpenAI-compatible Whisper FastAPI server
 ├── models/
 │   ├── chat/                # GGUF chat models
 │   └── embeddings/          # GGUF embedding models
