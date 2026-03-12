@@ -20,11 +20,10 @@ logs/*.pid
 # Not tracked: they're third-party repos; our launcher scripts are tracked.
 Kokoro-FastAPI/
 
-# ── ComfyUI — cloned fresh by install.sh / llamactl comfyui install ──────────
-# Ignore the entire ComfyUI directory except our .gitkeep placeholders.
+# ── ComfyUI — cloned fresh by llamactl comfyui install / install.sh ──────────
+# The ComfyUI directory itself is not tracked (large, third-party code).
+# Models placed inside it are downloaded by the user post-install.
 ComfyUI/
-!ComfyUI/models/checkpoints/.gitkeep
-!ComfyUI/models/loras/.gitkeep
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
