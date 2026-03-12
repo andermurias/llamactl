@@ -4,19 +4,22 @@
 
 ## What's included
 
-| Model key | Model | Purpose | Size |
-|-----------|-------|---------|------|
-| `gemma-3-12b-it` | Gemma 3 12B Q4_K_M (GGUF) | Chat — best Spanish + reasoning | ~7 GB |
-| `gemma-3-12b-it-mlx` | Gemma 3 12B 4-bit (MLX) | Chat — same model, MLX-native | ~7 GB |
-| `qwen3.5-9b` | Qwen 3.5 9B 4-bit (MLX) | Reasoning · CoT (`/think` token) | ~6 GB |
-| `qwen2.5-3b` | Qwen 2.5 3B 4-bit (MLX) | Fast · 128 K context | ~2 GB |
-| `qwen2.5-coder-14b` | Qwen 2.5 Coder 14B 4-bit (MLX) | Code generation · fill-in-middle | ~8 GB |
-| `qwen2.5-14b` | Qwen 2.5 14B 4-bit (MLX) | Agents · tool-calling · MCP | ~8 GB |
-| `phi-4` | Phi-4 14B 4-bit (MLX) | STEM · reasoning · coding | ~8 GB |
-| `nomic-embed-text-v1.5` | nomic-embed-text 1.5 Q8 (GGUF) | Embeddings · RAG · semantic search | ~270 MB |
-| `kokoro-tts` | Kokoro v1.0 (MPS) | Text-to-speech · OpenAI-compatible | ~82 MB |
+| Model key | Model | Purpose | Size | Max tokens |
+|-----------|-------|---------|------|-----------|
+| `gemma-3-12b-it` | Gemma 3 12B Q4_K_M (GGUF) | Chat — best Spanish + reasoning | ~7 GB | unlimited (32K ctx) |
+| `gemma-3-12b-it-mlx` | Gemma 3 12B 4-bit (MLX) | Chat — same model, MLX-native | ~7 GB | 8 192 |
+| `qwen3.5-9b` | Qwen 3.5 9B 4-bit (MLX) | Reasoning · CoT (`/think` token) | ~6 GB | **32 768** |
+| `qwen2.5-3b` | Qwen 2.5 3B 4-bit (MLX) | Fast · 128 K context | ~2 GB | 8 192 |
+| `qwen2.5-coder-14b` | Qwen 2.5 Coder 14B 4-bit (MLX) | Code generation · fill-in-middle | ~8 GB | **16 384** |
+| `qwen2.5-14b` | Qwen 2.5 14B 4-bit (MLX) | Agents · tool-calling · MCP | ~8 GB | **16 384** |
+| `phi-4` | Phi-4 14B 4-bit (MLX) | STEM · reasoning · coding | ~8 GB | **16 384** |
+| `nomic-embed-text-v1.5` | nomic-embed-text 1.5 Q8 (GGUF) | Embeddings · RAG · semantic search | ~270 MB | — |
+| `kokoro-tts` | Kokoro v1.0 (MPS) | Text-to-speech · OpenAI-compatible | ~82 MB | — |
 
 MLX models download from HuggingFace on first use. GGUF models are downloaded by the installer.
+
+> **Thinking models:** `qwen3.5-9b` uses 32 768 max tokens because the hidden `<think>…</think>` reasoning
+> chain can consume thousands of tokens before the visible answer begins.
 
 ---
 

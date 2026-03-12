@@ -34,7 +34,7 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       -ngl 99
-      --ctx-size 16384
+      --ctx-size 32768
       --parallel 1
       --log-file /Users/andermurias/AI/logs/inference.log
     useModelName: "gemma-3-12b-it"
@@ -65,12 +65,14 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 8192
     useModelName: "mlx-community/gemma-3-12b-it-4bit"
     ttl: 600
 
   # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
-  # Latest Qwen generation (2025). Replaces qwen3-8b: better benchmarks,
-  # same built-in /think / /no-think CoT tokens.
+  # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
+  # max-tokens is high because the <think>…</think> block alone can use
+  # thousands of tokens before the visible answer starts.
   # HF repo: mlx-community/Qwen3.5-9B-4bit  (~6 GB)
   qwen3.5-9b:
     cmd: |
@@ -79,6 +81,7 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 32768
     useModelName: "mlx-community/Qwen3.5-9B-4bit"
     ttl: 600
 
@@ -92,12 +95,14 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 8192
     useModelName: "mlx-community/Qwen2.5-3B-Instruct-4bit"
     ttl: 300
 
   # ── Coding · MLX — Qwen 2.5 Coder 14B ───────────────────────────────────
   # Best coding model that fits in 16 GB. Fine-tuned on code: fill-in-middle,
-  # multi-file edits, repo-level context. No Qwen3.5-Coder exists yet.
+  # multi-file edits, repo-level context.
+  # max-tokens 16384 supports generating full source files.
   # HF repo: mlx-community/Qwen2.5-Coder-14B-Instruct-4bit  (~8.3 GB)
   qwen2.5-coder-14b:
     cmd: |
@@ -106,13 +111,13 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 16384
     useModelName: "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit"
     ttl: 600
 
   # ── Agent / instructions · MLX — Qwen 2.5 14B ────────────────────────────
-  # NOT for chat — optimised for tool calling, function calling, MCP agents,
-  # and complex system-prompt following. Qwen2.5 has best-in-class tool-use
-  # benchmarks in the 14B range. Same 8.3 GB footprint as the coder above.
+  # Optimised for tool calling, function calling, MCP agents, and complex
+  # system-prompt following. max-tokens 16384 for long tool-call chains.
   # HF repo: mlx-community/Qwen2.5-14B-Instruct-4bit  (~8.3 GB)
   qwen2.5-14b:
     cmd: |
@@ -121,6 +126,7 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 16384
     useModelName: "mlx-community/Qwen2.5-14B-Instruct-4bit"
     ttl: 600
 
@@ -134,6 +140,7 @@ models:
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
+      --max-tokens 16384
     useModelName: "mlx-community/phi-4-4bit"
     ttl: 600
 
