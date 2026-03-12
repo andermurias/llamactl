@@ -1,6 +1,7 @@
-# Go build output
+# Go build output — ignore root binary but track the committed dist binary
 llamactl
 llamactl-*
+!bin/llamactl
 
 # Go test cache
 *.test

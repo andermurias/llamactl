@@ -1,105 +1,86 @@
 package cmd
 
 import (
-	"fmt"
-	"os/exec"
-	"strings"
+"fmt"
 
-	"github.com/andermurias/llamactl/internal/comfyui"
-	"github.com/andermurias/llamactl/internal/launchd"
-	"github.com/andermurias/llamactl/internal/llamaswap"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
+"github.com/andermurias/llamactl/internal/service"
+"github.com/pterm/pterm"
+"github.com/spf13/cobra"
 )
 
 func newStatusCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show status of llama-swap and ComfyUI",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus()
-		},
-	}
+return &cobra.Command{
+Use:   "status",
+Short: "Show status of llama-swap and ComfyUI",
+RunE: func(cmd *cobra.Command, args []string) error {
+return runStatus()
+},
+}
 }
 
 func runStatus() error {
-	bold := color.New(color.Bold)
-	green := color.New(color.FgGreen)
-	red := color.New(color.FgRed)
-	yellow := color.New(color.FgYellow)
-	cyan := color.New(color.FgCyan)
+s := service.GetStatus(cfg)
+cs := service.GetComfyUIStatus(cfg)
 
-	fmt.Println()
-	bold.Println("  llama-swap")
+fmt.Println()
 
-	if !fileExists(cfg.PlistPath) {
-		yellow.Println("  Status:     not installed")
-		fmt.Println()
-		fmt.Println("  Run: llamactl install  or  llamactl start")
-		fmt.Println()
-		return nil
-	}
+pterm.DefaultSection.WithLevel(2).Println("llama-swap")
 
-	if !launchd.IsLoaded(cfg) {
-		red.Println("  Status:     not loaded")
-		fmt.Printf("  Plist:      %s\n", cfg.PlistPath)
-		fmt.Println()
-		return nil
-	}
-
-	pid := launchd.GetPID(cfg)
-	if pid > 0 {
-		uptime := processUptime(pid)
-		green.Printf("  Status:     running  (PID %d, uptime %s)\n", pid, uptime)
-	} else {
-		exitS := launchd.GetExitStatus(cfg)
-		red.Printf("  Status:     stopped  (last exit: %s)\n", exitS)
-	}
-
-	autoStart := launchd.ReadAutoStart(cfg)
-	if autoStart {
-		green.Println("  Auto-start: enabled  (starts at login)")
-	} else {
-		yellow.Println("  Auto-start: disabled  (run 'llamactl enable' to activate)")
-	}
-
-	cyan.Printf("  API:        http://%s/v1\n", cfg.Listen)
-	fmt.Printf("  Config:     %s\n", cfg.ConfigFile)
-	fmt.Printf("  Log:        %s\n", cfg.LogFile)
-
-	fmt.Println()
-	bold.Println("  Loaded models:")
-	running, err := llamaswap.GetRunning(cfg)
-	if err != nil {
-		fmt.Println("    (service not responding)")
-	} else if len(running) == 0 {
-		fmt.Println("    (none — models load on first request)")
-	} else {
-		for _, m := range running {
-			green.Printf("    ● %s\n", m)
-		}
-	}
-
-	fmt.Println()
-	bold.Println("  ComfyUI  (image generation — manual)")
-	if comfyui.IsRunning(cfg) {
-		cpid := comfyui.GetPID(cfg)
-		cuptime := processUptime(cpid)
-		ip := comfyui.LocalIP()
-		green.Printf("  Status:     running  (PID %d, uptime %s)\n", cpid, cuptime)
-		cyan.Printf("  URL:        http://%s:%s\n", ip, cfg.ComfyUIPort)
-	} else {
-		yellow.Println("  Status:     stopped  (run: llamactl comfyui start)")
-	}
-
-	fmt.Println()
-	return nil
+if !s.IsInstalled {
+pterm.Warning.Println("Not installed  — run: llamactl install")
+fmt.Println()
+} else {
+var statusStr string
+switch {
+case s.IsRunning:
+statusStr = pterm.FgGreen.Sprintf("● running  (PID %d, uptime %s)", s.PID, s.Uptime)
+case s.IsLoaded:
+statusStr = pterm.FgRed.Sprint("○ stopped")
+default:
+statusStr = pterm.FgYellow.Sprint("○ not loaded")
 }
 
-func processUptime(pid int) string {
-	out, err := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "etime=").Output()
-	if err != nil {
-		return "?"
-	}
-	return strings.TrimSpace(string(out))
+var autoStr string
+if s.AutoStart {
+autoStr = pterm.FgGreen.Sprint("enabled  (starts at login)")
+} else {
+autoStr = pterm.FgYellow.Sprint("disabled  — run: llamactl enable")
+}
+
+_ = pterm.DefaultTable.WithHasHeader(false).WithData(pterm.TableData{
+{"  Status", statusStr},
+{"  Auto-start", autoStr},
+{"  API", pterm.FgCyan.Sprintf("http://%s/v1", s.APIAddr)},
+{"  Config", s.ConfigFile},
+{"  Log", s.LogFile},
+}).Render()
+fmt.Println()
+
+if s.IsRunning {
+pterm.DefaultSection.WithLevel(3).Println("Loaded models")
+if len(s.LoadedModels) == 0 {
+pterm.FgGray.Println("  (none — models load on first request)")
+} else {
+for _, m := range s.LoadedModels {
+pterm.FgGreen.Printf("  ● %s\n", m)
+}
+}
+fmt.Println()
+}
+}
+
+pterm.DefaultSection.WithLevel(2).Println("ComfyUI  (image generation)")
+
+if cs.IsRunning {
+_ = pterm.DefaultTable.WithHasHeader(false).WithData(pterm.TableData{
+{"  Status", pterm.FgGreen.Sprintf("● running  (PID %d, uptime %s)", cs.PID, cs.Uptime)},
+{"  URL", pterm.FgCyan.Sprint(cs.URL)},
+{"  Log", cs.LogFile},
+}).Render()
+} else {
+pterm.Warning.Println("Stopped  — run: llamactl comfyui start")
+}
+fmt.Println()
+
+return nil
 }

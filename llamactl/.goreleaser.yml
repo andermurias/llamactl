@@ -1,0 +1,48 @@
+project_name: llamactl
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: llamactl
+    main: .
+    binary: llamactl
+    ldflags:
+      - -s -w
+      - -X github.com/andermurias/llamactl/cmd.Version={{.Version}}
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: llamactl
+    format: tar.gz
+    name_template: "llamactl_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  github:
+    owner: andermurias
+    name: llamactl
+  draft: false
+  prerelease: auto
+  name_template: "llamactl {{.Version}}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request

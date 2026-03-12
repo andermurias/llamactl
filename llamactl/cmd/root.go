@@ -1,3 +1,12 @@
+// Package cmd contains all cobra command definitions for llamactl.
+//
+// Architecture:
+//   - cmd/      presentation layer (pterm UI, cobra wiring)
+//   - internal/service/ business logic (no UI, returns structs)
+//   - internal/*  low-level wrappers (launchd, llamaswap, comfyui, updater)
+//
+// To add a new command: create cmd/mycommand.go with newMyCmd(), register in init().
+// To expose commands over HTTP: call service.* functions from an HTTP handler.
 package cmd
 
 import (
@@ -5,36 +14,47 @@ import (
 
 	cmdcomfyui "github.com/andermurias/llamactl/cmd/comfyui"
 	"github.com/andermurias/llamactl/internal/config"
+	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
 var (
-	cfg     *config.Config
-	verbose bool
+	cfg     *config.Config // loaded once at startup from config.Load()
+	verbose bool           // --verbose / -v flag, available on every command
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "llamactl",
-	Short: "llamactl — llama-swap + ComfyUI service manager",
-	Long: `llamactl manages the local AI inference stack:
-  • llama-swap  — OpenAI-compatible proxy (launchd service)
-  • ComfyUI     — Image generation server (on-demand)`,
+	Short: "llamactl — local AI stack manager",
+	Long: `llamactl manages the local AI inference stack on macOS Apple Silicon.
+
+  Services:
+    llama-swap   OpenAI-compatible API proxy (launchd service)
+    ComfyUI      Image generation server (on-demand)
+
+  Quick start:
+    llamactl start          Start llama-swap
+    llamactl status         Check everything
+    llamactl models         List available models
+    llamactl comfyui start  Start image generation
+    llamactl upgrade        Pull updates and refresh binary
+
+  Run 'llamactl help <command>' for detailed usage.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
 
-// Execute runs the root command.
+// Execute is the entry point called by main.go.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		pterm.Error.Println(err)
 		os.Exit(1)
 	}
 }
 
 func init() {
 	cfg = config.Load()
-
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show extra detail")
-
 	rootCmd.AddCommand(
 		newStartCmd(),
 		newStopCmd(),

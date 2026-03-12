@@ -1,65 +1,41 @@
 package cmd
 
 import (
-	"fmt"
-	"time"
+"fmt"
 
-	"github.com/andermurias/llamactl/internal/launchd"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
+"github.com/andermurias/llamactl/internal/service"
+"github.com/pterm/pterm"
+"github.com/spf13/cobra"
 )
 
 func newStartCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "start",
-		Short: "Start llama-swap",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStart()
-		},
-	}
+return &cobra.Command{
+Use:   "start",
+Short: "Start llama-swap",
+RunE: func(cmd *cobra.Command, args []string) error {
+return runStart()
+},
+}
 }
 
 func runStart() error {
-	bold := color.New(color.Bold)
-	green := color.New(color.FgGreen)
-	blue := color.New(color.FgCyan)
-	red := color.New(color.FgRed)
-	warn := color.New(color.FgYellow)
+s := service.GetStatus(cfg)
+if s.IsRunning {
+pterm.Warning.Printf("llama-swap is already running (PID %d)\n", s.PID)
+return nil
+}
 
-	if !launchd.IsLoaded(cfg) {
-		if verbose {
-			fmt.Println("  Service not loaded — installing…")
-		}
-		if err := runInstall(); err != nil {
-			return err
-		}
-	}
+spinner, _ := pterm.DefaultSpinner.WithText("Starting llama-swap…").Start()
 
-	if launchd.IsRunning(cfg) {
-		pid := launchd.GetPID(cfg)
-		warn.Printf("⚠  llama-swap is already running (PID %d)\n", pid)
-		return nil
-	}
+pid, err := service.Start(cfg)
+if err != nil {
+spinner.Fail(err.Error())
+return err
+}
 
-	if err := launchd.Kickstart(cfg); err != nil {
-		return fmt.Errorf("kickstart failed: %w", err)
-	}
-
-	for i := 0; i < 8; i++ {
-		time.Sleep(2 * time.Second)
-		if launchd.IsRunning(cfg) {
-			break
-		}
-	}
-
-	if !launchd.IsRunning(cfg) {
-		red.Println("✗  llama-swap failed to start — check: llamactl logs")
-		return fmt.Errorf("service did not start")
-	}
-
-	pid := launchd.GetPID(cfg)
-	green.Printf("✓  llama-swap started  (PID %d)\n", pid)
-	bold.Printf("   API → http://%s/v1\n", cfg.Listen)
-	blue.Printf("   UI  → http://%s\n", cfg.Listen)
-	return nil
+spinner.Success(fmt.Sprintf("llama-swap started  (PID %d)", pid))
+pterm.Println()
+pterm.Info.Printf("API → http://%s/v1\n", cfg.Listen)
+pterm.Info.Printf("UI  → http://%s\n", cfg.Listen)
+return nil
 }

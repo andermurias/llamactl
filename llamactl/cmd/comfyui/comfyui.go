@@ -1,166 +1,120 @@
+// Package comfyui provides the 'llamactl comfyui' subcommand group.
 package comfyui
 
 import (
-	"fmt"
-	"os"
-	"time"
+"fmt"
+"os"
+"os/exec"
 
-	internalcomfyui "github.com/andermurias/llamactl/internal/comfyui"
-	"github.com/andermurias/llamactl/internal/config"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
+"github.com/andermurias/llamactl/internal/config"
+"github.com/andermurias/llamactl/internal/service"
+"github.com/pterm/pterm"
+"github.com/spf13/cobra"
 )
 
-// NewCmd returns the 'comfyui' cobra command with subcommands.
+// NewCmd creates the "comfyui" parent command with all subcommands attached.
 func NewCmd(cfg *config.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "comfyui",
-		Short: "Manage ComfyUI image generation server (on-demand)",
-		Long: `ComfyUI is managed on-demand (NOT a background service).
-It uses ~6 GB for image models — stop it before loading large LLMs.
-
-  llamactl comfyui start    Start on port ` + cfg.ComfyUIPort + `
-  llamactl comfyui stop     Stop and free memory
-  llamactl comfyui status   Show status and URL
-  llamactl comfyui logs     Show logs (-f to follow)`,
-	}
-
-	cmd.AddCommand(
-		newStartCmd(cfg),
-		newStopCmd(cfg),
-		newStatusCmd(cfg),
-		newLogsCmd(cfg),
-	)
-	return cmd
+cmd := &cobra.Command{
+Use:   "comfyui",
+Short: "Manage ComfyUI image generation server",
+}
+cmd.AddCommand(
+newStartCmd(cfg),
+newStopCmd(cfg),
+newStatusCmd(cfg),
+newLogsCmd(cfg),
+)
+return cmd
 }
 
 func newStartCmd(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
-		Use:   "start",
-		Short: "Start ComfyUI",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			green := color.New(color.FgGreen)
-			warn := color.New(color.FgYellow)
-			cyan := color.New(color.FgCyan)
-			red := color.New(color.FgRed)
-
-			if _, err := os.Stat(cfg.ComfyUIDir); err != nil {
-				return fmt.Errorf("ComfyUI not found at %s\n  Run: git clone https://github.com/comfyanonymous/ComfyUI %s",
-					cfg.ComfyUIDir, cfg.ComfyUIDir)
-			}
-			if _, err := os.Stat(cfg.ComfyUIPython); err != nil {
-				return fmt.Errorf("ComfyUI venv not found at %s\n  Run the installer: %s/scripts/install.sh",
-					cfg.ComfyUIPython, cfg.AIDir)
-			}
-			if internalcomfyui.IsRunning(cfg) {
-				warn.Printf("⚠  ComfyUI is already running (PID %d)\n", internalcomfyui.GetPID(cfg))
-				return nil
-			}
-
-			cyan.Printf("→  Starting ComfyUI on port %s…\n", cfg.ComfyUIPort)
-			pid, err := internalcomfyui.Start(cfg)
-			if err != nil {
-				return fmt.Errorf("start ComfyUI: %w", err)
-			}
-
-			ready := internalcomfyui.WaitReady(cfg, 60*time.Second)
-			if !ready || !internalcomfyui.IsRunning(cfg) {
-				red.Printf("✗  ComfyUI failed to start — check logs: %s\n", cfg.ComfyUILog)
-				os.Remove(cfg.ComfyUIPID)
-				return fmt.Errorf("ComfyUI did not become ready")
-			}
-
-			ip := internalcomfyui.LocalIP()
-			green.Printf("✓  ComfyUI started  (PID %d)\n", pid)
-			cyan.Printf("   UI  → http://%s:%s\n", ip, cfg.ComfyUIPort)
-			cyan.Printf("   Log → %s\n", cfg.ComfyUILog)
-			warn.Println("⚠  Remember to stop ComfyUI before loading large LLMs (shared memory pool).")
-			return nil
-		},
-	}
+return &cobra.Command{
+Use:   "start",
+Short: "Start ComfyUI",
+RunE: func(cmd *cobra.Command, args []string) error {
+cs := service.GetComfyUIStatus(cfg)
+if cs.IsRunning {
+pterm.Warning.Printf("ComfyUI is already running (PID %d)\n", cs.PID)
+pterm.Info.Printf("URL: %s\n", cs.URL)
+return nil
+}
+spinner, _ := pterm.DefaultSpinner.WithText("Starting ComfyUI (waiting up to 60 s)…").Start()
+pid, err := service.StartComfyUI(cfg)
+if err != nil {
+spinner.Fail(err.Error())
+return err
+}
+cs2 := service.GetComfyUIStatus(cfg)
+spinner.Success(fmt.Sprintf("ComfyUI started  (PID %d)", pid))
+pterm.Info.Printf("URL: %s\n", cs2.URL)
+return nil
+},
+}
 }
 
 func newStopCmd(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
-		Use:   "stop",
-		Short: "Stop ComfyUI",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			green := color.New(color.FgGreen)
-			warn := color.New(color.FgYellow)
-
-			if !internalcomfyui.IsRunning(cfg) {
-				warn.Println("⚠  ComfyUI is not running")
-				return nil
-			}
-			pid := internalcomfyui.GetPID(cfg)
-			color.New(color.FgCyan).Printf("→  Stopping ComfyUI (PID %d)…\n", pid)
-			if err := internalcomfyui.Stop(cfg); err != nil {
-				return err
-			}
-			green.Println("✓  ComfyUI stopped")
-			return nil
-		},
-	}
+return &cobra.Command{
+Use:   "stop",
+Short: "Stop ComfyUI",
+RunE: func(cmd *cobra.Command, args []string) error {
+cs := service.GetComfyUIStatus(cfg)
+if !cs.IsRunning {
+pterm.Warning.Println("ComfyUI is not running")
+return nil
+}
+spinner, _ := pterm.DefaultSpinner.WithText("Stopping ComfyUI…").Start()
+if err := service.StopComfyUI(cfg); err != nil {
+spinner.Fail(err.Error())
+return err
+}
+spinner.Success("ComfyUI stopped")
+return nil
+},
+}
 }
 
 func newStatusCmd(cfg *config.Config) *cobra.Command {
-	return &cobra.Command{
-		Use:   "status",
-		Short: "Show ComfyUI status",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			bold := color.New(color.Bold)
-			green := color.New(color.FgGreen)
-			yellow := color.New(color.FgYellow)
-			cyan := color.New(color.FgCyan)
-
-			fmt.Println()
-			bold.Println("  ComfyUI")
-			if internalcomfyui.IsRunning(cfg) {
-				pid := internalcomfyui.GetPID(cfg)
-				ip := internalcomfyui.LocalIP()
-				green.Printf("  Status:  running  (PID %d)\n", pid)
-				cyan.Printf("  UI:      http://%s:%s\n", ip, cfg.ComfyUIPort)
-			} else {
-				yellow.Println("  Status:  stopped  (manual service — run: llamactl comfyui start)")
-			}
-			fmt.Printf("  Dir:     %s\n", cfg.ComfyUIDir)
-			fmt.Printf("  Log:     %s\n", cfg.ComfyUILog)
-			fmt.Println()
-			return nil
-		},
-	}
+return &cobra.Command{
+Use:   "status",
+Short: "Show ComfyUI status",
+Run: func(cmd *cobra.Command, args []string) {
+fmt.Println()
+pterm.DefaultSection.WithLevel(2).Println("ComfyUI")
+cs := service.GetComfyUIStatus(cfg)
+if cs.IsRunning {
+_ = pterm.DefaultTable.WithHasHeader(false).WithData(pterm.TableData{
+{"  Status", pterm.FgGreen.Sprintf("● running  (PID %d, uptime %s)", cs.PID, cs.Uptime)},
+{"  URL", pterm.FgCyan.Sprint(cs.URL)},
+{"  Log", cs.LogFile},
+}).Render()
+} else {
+pterm.Warning.Println("Stopped  — run: llamactl comfyui start")
+}
+fmt.Println()
+},
+}
 }
 
 func newLogsCmd(cfg *config.Config) *cobra.Command {
-	var follow bool
-	cmd := &cobra.Command{
-		Use:   "logs",
-		Short: "Show ComfyUI logs",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, err := os.Stat(cfg.ComfyUILog); os.IsNotExist(err) {
-				color.New(color.FgYellow).Println("⚠  No ComfyUI log yet — start first: llamactl comfyui start")
-				return nil
-			}
-			if follow {
-				proc, err := os.StartProcess("/usr/bin/tail",
-					[]string{"tail", "-n", "50", "-f", cfg.ComfyUILog},
-					&os.ProcAttr{Files: []*os.File{os.Stdin, os.Stdout, os.Stderr}})
-				if err != nil {
-					return err
-				}
-				_, err = proc.Wait()
-				return err
-			}
-			proc, err := os.StartProcess("/usr/bin/tail",
-				[]string{"tail", "-n", "100", cfg.ComfyUILog},
-				&os.ProcAttr{Files: []*os.File{os.Stdin, os.Stdout, os.Stderr}})
-			if err != nil {
-				return err
-			}
-			_, err = proc.Wait()
-			return err
-		},
-	}
-	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow logs in real time")
-	return cmd
+var follow bool
+var lines int
+cmd := &cobra.Command{
+Use:   "logs",
+Short: "Tail ComfyUI logs",
+RunE: func(cmd *cobra.Command, args []string) error {
+pterm.Info.Printf("Log: %s\n\n", cfg.ComfyUILog)
+tailArgs := []string{"-n", fmt.Sprintf("%d", lines)}
+if follow {
+tailArgs = append(tailArgs, "-f")
+}
+tailArgs = append(tailArgs, cfg.ComfyUILog)
+c := exec.Command("tail", tailArgs...)
+c.Stdout = os.Stdout
+c.Stderr = os.Stderr
+return c.Run()
+},
+}
+cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
+cmd.Flags().IntVarP(&lines, "lines", "n", 100, "Number of lines")
+return cmd
 }

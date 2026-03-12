@@ -1,30 +1,27 @@
 package cmd
 
 import (
-	"os"
-	"time"
-
-	"github.com/andermurias/llamactl/internal/launchd"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
+"github.com/andermurias/llamactl/internal/service"
+"github.com/pterm/pterm"
+"github.com/spf13/cobra"
 )
 
 func newUninstallCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "uninstall",
-		Short: "Remove the launchd service",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			green := color.New(color.FgGreen)
-			if launchd.IsRunning(cfg) {
-				_ = runStop()
-			}
-			if launchd.IsLoaded(cfg) {
-				_ = launchd.Bootout(cfg)
-				time.Sleep(time.Second)
-			}
-			_ = os.Remove(cfg.PlistPath)
-			green.Println("✓  Service uninstalled (logs and config preserved)")
-			return nil
-		},
-	}
+return &cobra.Command{
+Use:   "uninstall",
+Short: "Remove the launchd service",
+RunE: func(cmd *cobra.Command, args []string) error {
+return runUninstall()
+},
+}
+}
+
+func runUninstall() error {
+spinner, _ := pterm.DefaultSpinner.WithText("Uninstalling launchd service…").Start()
+if err := service.Uninstall(cfg); err != nil {
+spinner.Fail(err.Error())
+return err
+}
+spinner.Success("LaunchAgent removed")
+return nil
 }

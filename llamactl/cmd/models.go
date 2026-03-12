@@ -1,74 +1,77 @@
 package cmd
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
+"fmt"
+"path/filepath"
 
-	"github.com/andermurias/llamactl/internal/llamaswap"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
+"github.com/andermurias/llamactl/internal/llamaswap"
+"github.com/andermurias/llamactl/internal/service"
+"github.com/pterm/pterm"
+"github.com/spf13/cobra"
 )
 
 func newModelsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "models",
-		Short: "Show available models and download status",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runModels()
-		},
-	}
+return &cobra.Command{
+Use:   "models",
+Short: "Show available models and cache status",
+RunE: func(cmd *cobra.Command, args []string) error {
+return runModels()
+},
+}
 }
 
 func runModels() error {
-	bold := color.New(color.Bold)
-	green := color.New(color.FgGreen)
-	cyan := color.New(color.FgCyan)
-	dim := color.New(color.FgHiBlack)
+spinner, _ := pterm.DefaultSpinner.WithText("Fetching model info…").Start()
+info := service.GetModelsInfo(cfg)
+spinner.Stop()
 
-	models, err := llamaswap.GetModels(cfg)
-	if err != nil {
-		color.New(color.FgRed).Println("✗  llama-swap not responding — start with: llamactl start")
-		return nil
-	}
+fmt.Println()
 
-	running, _ := llamaswap.GetRunning(cfg)
-	runningSet := make(map[string]bool)
-	for _, r := range running {
-		runningSet[r] = true
-	}
+pterm.DefaultSection.WithLevel(2).Printf("API models  (%d)\n", len(info.APIModels))
+if !info.APIReachable {
+pterm.Error.Println("llama-swap not responding — start with: llamactl start")
+} else if len(info.APIModels) == 0 {
+pterm.FgGray.Println("  (no models registered)")
+} else {
+tableData := pterm.TableData{{"  Model ID", "Status"}}
+for _, m := range info.APIModels {
+status := pterm.FgGray.Sprint("○ available")
+if info.LoadedIDs[m.ID] {
+status = pterm.FgGreen.Sprint("● loaded")
+}
+tableData = append(tableData, []string{"  " + m.ID, status})
+}
+_ = pterm.DefaultTable.WithHasHeader(true).WithData(tableData).Render()
+}
 
-	fmt.Println()
-	bold.Printf("  Available models (%d):\n", len(models))
-	for _, m := range models {
-		if runningSet[m.ID] {
-			green.Printf("    ● %-35s [loaded]\n", m.ID)
-		} else {
-			dim.Printf("    ○ %s\n", m.ID)
-		}
-	}
+fmt.Println()
 
-	fmt.Println()
-	bold.Println("  GGUF models (local ~/AI/models/):")
-	ggufs, _ := llamaswap.GGUFFiles(cfg)
-	if len(ggufs) == 0 {
-		dim.Println("    (none)")
-	}
-	for _, f := range ggufs {
-		name := filepath.Base(f.Path)
-		green.Printf("    ✓ %-45s (%s)\n", name, llamaswap.FormatBytes(f.Size))
-	}
+pterm.DefaultSection.WithLevel(2).Println("Local GGUF files  (~/AI/models/)")
+if len(info.GGUFFiles) == 0 {
+pterm.FgGray.Println("  (none)")
+} else {
+tableData := pterm.TableData{{"  File", "Size"}}
+for _, f := range info.GGUFFiles {
+tableData = append(tableData, []string{
+"  " + filepath.Base(f.Path),
+llamaswap.FormatBytes(f.Size),
+})
+}
+_ = pterm.DefaultTable.WithHasHeader(true).WithData(tableData).Render()
+}
 
-	fmt.Println()
-	bold.Println("  MLX/HF model cache (~/.cache/huggingface/hub/):")
-	cachedNames, total, err := llamaswap.HFCachedModels()
-	if err != nil {
-		dim.Println("    (cache not found)")
-	} else {
-		cyan.Printf("    Total: %s\n", llamaswap.FormatBytes(total))
-		fmt.Printf("    %s\n", strings.Join(cachedNames, ", "))
-	}
+fmt.Println()
 
-	fmt.Println()
-	return nil
+pterm.DefaultSection.WithLevel(2).Printf("HuggingFace cache (~/.cache/huggingface/hub/)  total: %s\n",
+llamaswap.FormatBytes(info.HFTotalBytes))
+if len(info.HFModels) == 0 {
+pterm.FgGray.Println("  (empty)")
+} else {
+for _, name := range info.HFModels {
+pterm.FgCyan.Printf("  • %s\n", name)
+}
+}
+
+fmt.Println()
+return nil
 }
