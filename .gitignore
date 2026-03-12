@@ -16,10 +16,15 @@ logs/*.pid
 # Keep logs directory
 !logs/.gitkeep
 
-# ── Kokoro-FastAPI — cloned fresh by install.sh ───────────────────────────────
-# Not tracked: it's a third-party repo; scripts/start-kokoro.sh is the only
-# custom piece and that IS tracked.
+# ── Third-party repos — cloned fresh by install.sh ───────────────────────────
+# Not tracked: they're third-party repos; our launcher scripts are tracked.
 Kokoro-FastAPI/
+
+# ── ComfyUI — cloned fresh by install.sh / llamactl comfyui install ──────────
+# Ignore the entire ComfyUI directory except our .gitkeep placeholders.
+ComfyUI/
+!ComfyUI/models/checkpoints/.gitkeep
+!ComfyUI/models/loras/.gitkeep
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

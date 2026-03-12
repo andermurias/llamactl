@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# llamactl — llama-swap service manager
-# Usage: llamactl [--verbose] <command>
+# llamactl — llama-swap + ComfyUI service manager
+# Usage: llamactl [--verbose] <command> [options]
 # Commands: start, stop, restart, status, enable, disable, install, uninstall, logs, upgrade, version, help
+#           comfyui <start|stop|status|enable|disable|install|uninstall|logs>
 
 set -euo pipefail
 
-# ── Configuration ────────────────────────────────────────────────────────────
+# ── llama-swap configuration ──────────────────────────────────────────────────
 
 LABEL="com.llamastack.llama-swap"
 PLIST_PATH="$HOME/Library/LaunchAgents/${LABEL}.plist"
@@ -17,6 +18,16 @@ LOG_FILE="$LOG_DIR/llama-swap.log"
 LISTEN="127.0.0.1:8080"
 USER_ID=$(id -u)
 SERVICE_TARGET="gui/${USER_ID}/${LABEL}"
+
+# ── ComfyUI configuration ─────────────────────────────────────────────────────
+
+COMFYUI_LABEL="com.llamastack.comfyui"
+COMFYUI_PLIST="$HOME/Library/LaunchAgents/${COMFYUI_LABEL}.plist"
+COMFYUI_DIR="$AI_DIR/ComfyUI"
+COMFYUI_PYTHON="$COMFYUI_DIR/.venv/bin/python"
+COMFYUI_PORT="8188"
+COMFYUI_LOG="$LOG_DIR/comfyui.log"
+COMFYUI_SERVICE_TARGET="gui/${USER_ID}/${COMFYUI_LABEL}"
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +84,134 @@ get_exit_status() {
 
 ensure_log_dir() {
   mkdir -p "$LOG_DIR"
+}
+
+# ── ComfyUI (PID-managed, manual start — NOT a launchd service) ───────────────
+# ComfyUI uses ~6 GB for image models; run it on demand to preserve RAM for LLMs.
+# Start with: llamactl comfyui start
+# Stop  with: llamactl comfyui stop
+
+COMFYUI_PID_FILE="$LOG_DIR/comfyui.pid"
+
+comfyui_get_pid() {
+  if [[ -f "$COMFYUI_PID_FILE" ]]; then
+    cat "$COMFYUI_PID_FILE" 2>/dev/null | tr -d '[:space:]' || true
+  fi
+}
+
+comfyui_is_running() {
+  local pid; pid=$(comfyui_get_pid)
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+cmd_comfyui() {
+  local subcmd="${1:-status}"; shift 2>/dev/null || true
+
+  case "$subcmd" in
+    start)
+      if ! [[ -d "$COMFYUI_DIR" ]]; then
+        err "ComfyUI not found at $COMFYUI_DIR"
+        err "Run: git clone https://github.com/comfyanonymous/ComfyUI $COMFYUI_DIR"
+        exit 1
+      fi
+      if ! [[ -f "$COMFYUI_PYTHON" ]]; then
+        err "ComfyUI venv not found at $COMFYUI_PYTHON"
+        err "Run the installer: $AI_DIR/scripts/install.sh"
+        exit 1
+      fi
+      if comfyui_is_running; then
+        warn "ComfyUI is already running (PID $(comfyui_get_pid))"
+        return 0
+      fi
+
+      ensure_log_dir
+      info "Starting ComfyUI on port ${COMFYUI_PORT}…"
+      "$COMFYUI_PYTHON" "$COMFYUI_DIR/main.py" \
+        --listen 0.0.0.0 --port "$COMFYUI_PORT" \
+        >> "$COMFYUI_LOG" 2>&1 &
+      local pid=$!
+      echo "$pid" > "$COMFYUI_PID_FILE"
+
+      local i=0
+      while ! curl -s --max-time 2 "http://127.0.0.1:${COMFYUI_PORT}" &>/dev/null \
+            && (( i < 20 )); do sleep 1; (( i++ )); done
+
+      if comfyui_is_running; then
+        ok "ComfyUI started  (PID $pid)"
+        info "UI  → http://$(ipconfig getifaddr en0 2>/dev/null || echo 'localhost'):${COMFYUI_PORT}"
+        info "Log → $COMFYUI_LOG"
+        warn "Remember to stop ComfyUI before loading large LLMs — they share the same memory pool."
+      else
+        err "ComfyUI failed to start — check logs: $COMFYUI_LOG"
+        rm -f "$COMFYUI_PID_FILE"
+        exit 1
+      fi
+      ;;
+
+    stop)
+      if ! comfyui_is_running; then
+        warn "ComfyUI is not running"
+        rm -f "$COMFYUI_PID_FILE"
+        return 0
+      fi
+      local pid; pid=$(comfyui_get_pid)
+      info "Stopping ComfyUI (PID $pid)…"
+      kill "$pid" 2>/dev/null || true
+      local i=0
+      while comfyui_is_running && (( i < 10 )); do sleep 1; (( i++ )); done
+      if comfyui_is_running; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+      rm -f "$COMFYUI_PID_FILE"
+      ok "ComfyUI stopped"
+      ;;
+
+    status)
+      echo ""
+      echo -e "  ${BOLD}ComfyUI${RESET}"
+      if comfyui_is_running; then
+        local pid; pid=$(comfyui_get_pid)
+        local uptime; uptime=$(ps -p "$pid" -o etime= 2>/dev/null | tr -d ' ' || echo "?")
+        echo -e "  Status:   ${GREEN}running${RESET}  (PID $pid, uptime $uptime)"
+        echo -e "  UI:       http://$(ipconfig getifaddr en0 2>/dev/null || echo 'localhost'):${COMFYUI_PORT}"
+      else
+        echo -e "  Status:   ${YELLOW}stopped${RESET}  (manual service — start with: llamactl comfyui start)"
+      fi
+      echo -e "  Dir:      $COMFYUI_DIR"
+      echo -e "  Log:      $COMFYUI_LOG"
+      echo ""
+      ;;
+
+    logs)
+      local follow=false
+      for arg in "$@"; do [[ "$arg" == "-f" || "$arg" == "--follow" ]] && follow=true; done
+      if $follow; then
+        tail -n 50 -f "$COMFYUI_LOG" 2>/dev/null || { warn "No ComfyUI log yet"; exit 1; }
+      else
+        [[ -f "$COMFYUI_LOG" ]] && tail -n 100 "$COMFYUI_LOG" || warn "No ComfyUI log yet"
+      fi
+      ;;
+
+    help|--help|-h)
+      echo ""
+      echo -e "  ${BOLD}llamactl comfyui${RESET} — ComfyUI image generation (manual, on-demand)"
+      echo ""
+      echo "  start       Start ComfyUI (port ${COMFYUI_PORT})"
+      echo "  stop        Stop ComfyUI and free memory"
+      echo "  status      Show status and URL"
+      echo "  logs        Show last 100 lines of ComfyUI logs"
+      echo "  logs -f     Follow ComfyUI logs in real time"
+      echo ""
+      echo -e "  ${YELLOW}⚠  ComfyUI uses ~6 GB for image models — always stop it before loading large LLMs.${RESET}"
+      echo ""
+      ;;
+
+    *)
+      err "Unknown comfyui command: '$subcmd'"
+      echo "  Usage: llamactl comfyui <start|stop|status|logs>" >&2
+      exit 1
+      ;;
+  esac
 }
 
 # ── Plist writer ─────────────────────────────────────────────────────────────
@@ -286,6 +425,18 @@ except Exception as e:
   fi
 
   echo ""
+
+  # ComfyUI inline status
+  echo -e "  ${BOLD}ComfyUI${RESET} (image generation — manual)"
+  if comfyui_is_running; then
+    local cpid; cpid=$(comfyui_get_pid)
+    local cuptime; cuptime=$(ps -p "$cpid" -o etime= 2>/dev/null | tr -d ' ' || echo "?")
+    echo -e "  ComfyUI:    ${GREEN}running${RESET}  (PID $cpid, uptime $cuptime) → http://$(ipconfig getifaddr en0 2>/dev/null || echo 'localhost'):${COMFYUI_PORT}"
+  else
+    echo -e "  ComfyUI:    ${YELLOW}stopped${RESET}  (run 'llamactl comfyui start' to enable image generation)"
+  fi
+
+  echo ""
 }
 
 cmd_enable() {
@@ -400,7 +551,7 @@ cmd_help() {
   echo "    start       Start the service (installs plist automatically)"
   echo "    stop        Stop the service"
   echo "    restart     Stop then start"
-  echo "    status      Show status, PID, uptime, and loaded models"
+  echo "    status      Show status, PID, uptime, loaded models, and ComfyUI"
   echo ""
   echo -e "  ${BOLD}AUTO-START (login item)${RESET}"
   echo "    enable      Install + start + auto-start at every login"
@@ -408,8 +559,14 @@ cmd_help() {
   echo "    install     Install launchd plist without starting"
   echo "    uninstall   Remove launchd plist completely"
   echo ""
+  echo -e "  ${BOLD}IMAGE GENERATION (on-demand)${RESET}"
+  echo "    comfyui start    Start ComfyUI on port ${COMFYUI_PORT} (uses ~6 GB)"
+  echo "    comfyui stop     Stop ComfyUI and free memory"
+  echo "    comfyui status   Show ComfyUI status and URL"
+  echo "    comfyui logs     Show ComfyUI logs  (-f to follow)"
+  echo ""
   echo -e "  ${BOLD}LOGS & MAINTENANCE${RESET}"
-  echo "    logs        Show last 100 lines of logs"
+  echo "    logs        Show last 100 lines of llama-swap logs"
   echo "    logs -f     Follow logs in real time"
   echo "    upgrade     Update llama-swap binary to latest release"
   echo "    version     Show llama-swap version"
@@ -441,6 +598,7 @@ case "$CMD" in
   logs)      cmd_logs "$@" ;;
   upgrade)   cmd_upgrade ;;
   version)   cmd_version ;;
+  comfyui)   cmd_comfyui "$@" ;;
   help|--help|-h) cmd_help ;;
   *)
     err "Unknown command: '$CMD'"

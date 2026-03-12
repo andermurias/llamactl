@@ -23,6 +23,27 @@ healthCheckTimeout: 120
 # Send both proxy events AND upstream model logs to stdout (captured to log file by launchd)
 logToStdout: "both"
 
+# ── Groups — memory efficiency ────────────────────────────────────────────────
+# swap:true      → only ONE model in this group can be loaded at a time.
+#                  Switching models instantly unloads the previous one.
+# exclusive:false → secondary services (whisper, kokoro, nomic-embed) are NOT
+#                   evicted when an LLM starts; they coexist (~2 GB combined).
+#
+# Result on 16 GB: one large LLM (≤9 GB) + secondary services (~2 GB) = safe.
+groups:
+  llm:
+    swap: true
+    exclusive: false
+    members:
+      - gemma-3-12b-it
+      - gemma-3-12b-it-mlx
+      - qwen3.5-9b
+      - qwen2.5-3b
+      - qwen2.5-coder-14b
+      - qwen2.5-14b
+      - phi-4
+      - qwen2.5-vl-7b
+
 models:
   # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
   # --alias makes /v1/models report the same name clients use in requests.
@@ -38,7 +59,7 @@ models:
       --parallel 1
       --log-file /Users/andermurias/AI/logs/inference.log
     useModelName: "gemma-3-12b-it"
-    ttl: 600
+    ttl: 300
 
   # ── Embeddings · GGUF (llama.cpp) ────────────────────────────────────────
   nomic-embed-text-v1.5:
@@ -54,7 +75,7 @@ models:
       --embedding
       --log-file /Users/andermurias/AI/logs/embeddings.log
     useModelName: "nomic-embed-text-v1.5"
-    ttl: 120
+    ttl: 60
 
   # ── Chat · MLX — Gemma 3 12B (native Apple Silicon) ──────────────────────
   # HF repo: mlx-community/gemma-3-12b-it-4bit  (~7 GB, downloads on first use)
@@ -67,7 +88,7 @@ models:
       --log-level WARNING
       --max-tokens 8192
     useModelName: "mlx-community/gemma-3-12b-it-4bit"
-    ttl: 600
+    ttl: 300
 
   # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
   # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
@@ -83,7 +104,7 @@ models:
       --log-level WARNING
       --max-tokens 32768
     useModelName: "mlx-community/Qwen3.5-9B-4bit"
-    ttl: 600
+    ttl: 300
 
   # ── Fast · MLX — Qwen 2.5 3B (small, 128 k context) ─────────────────────
   # ~2 GB, loads in seconds, native 128 k token window.
@@ -113,7 +134,7 @@ models:
       --log-level WARNING
       --max-tokens 16384
     useModelName: "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit"
-    ttl: 600
+    ttl: 300
 
   # ── Agent / instructions · MLX — Qwen 2.5 14B ────────────────────────────
   # Optimised for tool calling, function calling, MCP agents, and complex
@@ -128,7 +149,7 @@ models:
       --log-level WARNING
       --max-tokens 16384
     useModelName: "mlx-community/Qwen2.5-14B-Instruct-4bit"
-    ttl: 600
+    ttl: 300
 
   # ── Alternative · MLX — Microsoft Phi-4 14B ──────────────────────────────
   # 14 B at 4-bit ≈ 8 GB; strong on STEM, reasoning and coding.
@@ -142,7 +163,7 @@ models:
       --log-level WARNING
       --max-tokens 16384
     useModelName: "mlx-community/phi-4-4bit"
-    ttl: 600
+    ttl: 300
 
   # ── Vision · Qwen2.5 VL 7B (image + text → text) ─────────────────────────
   # Multimodal chat: attach images to any message — OCR, screenshots, charts,
@@ -161,7 +182,7 @@ models:
       --ctx-size 8192
       --parallel 1
     useModelName: "qwen2.5-vl-7b"
-    ttl: 600
+    ttl: 300
 
   # ── STT — Whisper large-v3-turbo (OpenAI-compatible transcription) ─────────
   # Metal-accelerated speech-to-text using mlx-whisper.
@@ -181,7 +202,7 @@ models:
     cmd: /Users/andermurias/AI/scripts/start-whisper.sh ${PORT}
     useModelName: "whisper-stt"
     checkEndpoint: /health
-    ttl: 300
+    ttl: 120
 
   # ── TTS — Kokoro 82M (OpenAI-compatible /v1/audio/speech) ────────────────
   # MPS-accelerated on Apple Silicon. Model weights already at:
@@ -211,4 +232,4 @@ models:
     cmd: /Users/andermurias/AI/scripts/start-kokoro.sh ${PORT}
     useModelName: "kokoro"
     checkEndpoint: /health
-    ttl: 300
+    ttl: 120
