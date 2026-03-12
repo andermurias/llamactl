@@ -76,7 +76,7 @@ The interactive installer will:
 5. Download Kokoro model weights
 6. Install the `llama-swap` binary
 7. Download GGUF models (you can pick which ones)
-8. Install `llamactl` system-wide
+8. Build & install `llamactl` Go binary system-wide (`/opt/homebrew/bin/llamactl`)
 9. Optionally enable auto-start at login
 
 ---
@@ -95,9 +95,16 @@ llamactl disable     # Disable auto-start
 llamactl logs        # Last 100 lines of log
 llamactl logs -f     # Follow logs in real time
 
+llamactl models      # List all models (API, GGUF files, HF cache)
 llamactl upgrade     # Update llama-swap binary to latest release
-llamactl version     # Show llama-swap version
+llamactl version     # Show llamactl + llama-swap version
 llamactl --verbose <cmd>  # Extra detail on any command
+
+# ComfyUI (image generation)
+llamactl comfyui start   # Start ComfyUI server (port 8188)
+llamactl comfyui stop    # Stop ComfyUI
+llamactl comfyui status  # Show ComfyUI process state
+llamactl comfyui logs    # Tail ComfyUI log
 ```
 
 ---
@@ -305,8 +312,14 @@ my-new-model:
 ```
 ~/AI/
 ├── llama-swap.yaml          # Central config — all model routing lives here
+├── llamactl/                # Go source for the llamactl CLI tool
+│   ├── main.go
+│   ├── Makefile             # make install VERSION=v1.0.0
+│   ├── go.mod / go.sum
+│   ├── cmd/                 # Cobra commands (start/stop/restart/status/…)
+│   └── internal/            # config, launchd, llamaswap, comfyui packages
 ├── scripts/
-│   ├── llamactl             # Service manager (symlinked to /opt/homebrew/bin)
+│   ├── llamactl             # Legacy bash script (superseded by Go binary)
 │   ├── install.sh           # Interactive first-time installer
 │   ├── install-llama-swap.sh# Standalone llama-swap binary updater
 │   ├── download-models.sh   # Download GGUF models
@@ -341,7 +354,7 @@ llamactl logs -f
 ```bash
 lsof -i :8080          # Find what's using it
 ```
-Change the port in `llamactl` (`LISTEN=` variable) and in `llama-swap.yaml` if needed.
+Change the port in `llama-swap.yaml` (`httpListenAddress:`) and restart.
 
 **Kokoro TTS not responding**
 ```bash

@@ -9,7 +9,7 @@
 #   5. Download Kokoro TTS model weights
 #   6. Install llama-swap binary (latest release)
 #   7. Download GGUF models (optional, user-selectable)
-#   8. Install llamactl system-wide
+#   8. Build & install llamactl Go binary system-wide
 #   9. Optionally enable auto-start at login
 
 set -euo pipefail
@@ -21,7 +21,6 @@ AI_DIR="$(dirname "$SCRIPT_DIR")"
 KOKORO_DIR="$AI_DIR/Kokoro-FastAPI"
 MODELS_CHAT="$AI_DIR/models/chat"
 MODELS_EMBED="$AI_DIR/models/embeddings"
-LLAMACTL="$SCRIPT_DIR/llamactl"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 
@@ -295,19 +294,24 @@ else
   warn "Skipped — you can download later with: bash scripts/download-models.sh"
 fi
 
-# ── Step 7: llamactl symlink ──────────────────────────────────────────────────
+# ── Step 7: Build & install llamactl Go binary ───────────────────────────────
 
-step 7 "llamactl command"
+step 7 "llamactl Go binary"
 
-chmod +x "$LLAMACTL"
+LLAMACTL_DIR="$AI_DIR/llamactl"
+INSTALL_DIR="/opt/homebrew/bin"
 
-SYMLINK_TARGET="/opt/homebrew/bin/llamactl"
-if [[ -L "$SYMLINK_TARGET" && "$(readlink "$SYMLINK_TARGET")" == "$LLAMACTL" ]]; then
-  skip "llamactl symlink already in place"
-else
-  ln -sf "$LLAMACTL" "$SYMLINK_TARGET"
-  ok "llamactl → $SYMLINK_TARGET"
+# Ensure Go is installed
+if ! command -v go &>/dev/null; then
+  info "Installing Go via Homebrew…"
+  brew install go
 fi
+ok "Go $(go version | awk '{print $3}')"
+
+# Build and install
+info "Building llamactl…"
+(cd "$LLAMACTL_DIR" && make install VERSION=v1.0.0 INSTALL_DIR="$INSTALL_DIR" 2>&1 | tail -5)
+ok "llamactl installed at $INSTALL_DIR/llamactl"
 
 # ── Step 8: Verify llama-swap config ─────────────────────────────────────────
 
@@ -322,11 +326,11 @@ fi
 
 # Patch absolute paths in llama-swap.yaml to match this machine's username
 CURRENT_USER=$(whoami)
+LLAMACTL_BIN="/opt/homebrew/bin/llamactl"
 if grep -q "/Users/andermurias/" "$CONFIG" 2>/dev/null; then
   if [[ "$CURRENT_USER" != "andermurias" ]]; then
     info "Patching username in llama-swap.yaml ($CURRENT_USER)…"
     sed -i '' "s|/Users/andermurias/|/Users/$CURRENT_USER/|g" "$CONFIG"
-    sed -i '' "s|/Users/andermurias/|/Users/$CURRENT_USER/|g" "$LLAMACTL"
     ok "Paths updated for user $CURRENT_USER"
   else
     ok "llama-swap.yaml paths look correct"
@@ -345,11 +349,11 @@ echo "  'llamactl enable' also auto-starts llama-swap at every login."
 echo ""
 
 if ask_yn "Install llama-swap as a launchd service now?"; then
-  "$LLAMACTL" install
+  llamactl install
   if ask_yn "Enable auto-start at login?"; then
-    "$LLAMACTL" enable
+    llamactl enable
   else
-    "$LLAMACTL" start
+    llamactl start
   fi
 else
   warn "Skipped — run 'llamactl start' to start manually when ready"
