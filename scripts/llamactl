@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # llamactl — llama-swap + ComfyUI service manager
 # Usage: llamactl [--verbose] <command> [options]
-# Commands: start, stop, restart, status, enable, disable, install, uninstall, logs, upgrade, version, help
-#           comfyui <start|stop|status|enable|disable|install|uninstall|logs>
+# Commands: start, stop, restart, status, enable, disable, install, uninstall, logs, upgrade, version, models, help
+#           comfyui <start|stop|status|logs>
 
 set -euo pipefail
 
@@ -21,13 +21,10 @@ SERVICE_TARGET="gui/${USER_ID}/${LABEL}"
 
 # ── ComfyUI configuration ─────────────────────────────────────────────────────
 
-COMFYUI_LABEL="com.llamastack.comfyui"
-COMFYUI_PLIST="$HOME/Library/LaunchAgents/${COMFYUI_LABEL}.plist"
 COMFYUI_DIR="$AI_DIR/ComfyUI"
 COMFYUI_PYTHON="$COMFYUI_DIR/.venv/bin/python"
 COMFYUI_PORT="8188"
 COMFYUI_LOG="$LOG_DIR/comfyui.log"
-COMFYUI_SERVICE_TARGET="gui/${USER_ID}/${COMFYUI_LABEL}"
 
 # ── Colours ──────────────────────────────────────────────────────────────────
 
@@ -133,12 +130,12 @@ cmd_comfyui() {
       echo "$pid" > "$COMFYUI_PID_FILE"
 
       local i=0
-      while ! curl -s --max-time 2 "http://127.0.0.1:${COMFYUI_PORT}" &>/dev/null \
-            && (( i < 20 )); do sleep 1; (( i++ )); done
+      while ! curl -sf --max-time 3 "http://127.0.0.1:${COMFYUI_PORT}" -o /dev/null \
+            && (( i < 30 )); do sleep 2; (( i++ )); done
 
       if comfyui_is_running; then
         ok "ComfyUI started  (PID $pid)"
-        info "UI  → http://$(ipconfig getifaddr en0 2>/dev/null || echo 'localhost'):${COMFYUI_PORT}"
+        info "UI  → http://$(ipconfig getifaddr en0 2>/dev/null || echo '127.0.0.1'):${COMFYUI_PORT}"
         info "Log → $COMFYUI_LOG"
         warn "Remember to stop ComfyUI before loading large LLMs — they share the same memory pool."
       else
@@ -212,6 +209,82 @@ cmd_comfyui() {
       exit 1
       ;;
   esac
+}
+
+# ── Models ───────────────────────────────────────────────────────────────────
+
+cmd_models() {
+  echo ""
+  local models_resp running_resp
+  models_resp=$(curl -s --max-time 3 "http://${LISTEN}/v1/models" 2>/dev/null || echo "")
+  running_resp=$(curl -s --max-time 3 "http://${LISTEN}/running" 2>/dev/null || echo "")
+
+  if [[ -n "$models_resp" ]]; then
+    MODELS_JSON="$models_resp" RUNNING_JSON="$running_resp" python3 -c "
+import json, os, sys
+
+models_raw  = os.environ.get('MODELS_JSON', '')
+running_raw = os.environ.get('RUNNING_JSON', '')
+tty = sys.stdout.isatty()
+GREEN  = '\033[0;32m' if tty else ''
+RESET  = '\033[0m'    if tty else ''
+
+model_ids = []
+try:
+    data = json.loads(models_raw)
+    lst  = data.get('data', []) if isinstance(data, dict) else data
+    model_ids = [m.get('id', str(m)) if isinstance(m, dict) else str(m) for m in lst]
+except Exception as e:
+    print(f'    (parse error: {e})')
+
+running_ids = set()
+if running_raw:
+    try:
+        rd = json.loads(running_raw)
+        rm = rd if isinstance(rd, list) else rd.get('models', rd.get('running', []))
+        running_ids = set(
+            m.get('id', m.get('name', str(m))) if isinstance(m, dict) else str(m)
+            for m in rm
+        )
+    except:
+        pass
+
+print(f'  Available models ({len(model_ids)}):')
+for mid in model_ids:
+    if mid in running_ids:
+        print(f'    {GREEN}●{RESET} {mid:<32} [loaded]')
+    else:
+        print(f'    ○ {mid}')
+" 2>/dev/null || echo "    (unavailable)"
+  else
+    echo -e "  ${YELLOW}⚠${RESET}  llama-swap not responding at http://${LISTEN}"
+    echo "  Start it first: llamactl start"
+  fi
+
+  echo ""
+  echo -e "  ${BOLD}GGUF models (local ~/AI/models/):${RESET}"
+  local found_gguf=false
+  while IFS= read -r f; do
+    found_gguf=true
+    local size; size=$(du -sh "$f" 2>/dev/null | awk '{print $1}')
+    echo -e "    ${GREEN}✓${RESET} $(basename "$f")  (${size})"
+  done < <(find "$AI_DIR/models" -name "*.gguf" 2>/dev/null | sort)
+  $found_gguf || echo "    (none found)"
+
+  echo ""
+  echo -e "  ${BOLD}MLX/HF model cache (~/.cache/huggingface/hub/):${RESET}"
+  local hf_cache="$HOME/.cache/huggingface/hub"
+  if [[ -d "$hf_cache" ]]; then
+    local total; total=$(du -sh "$hf_cache" 2>/dev/null | awk '{print $1}')
+    echo "    Total: ${total}"
+    local cached; cached=$(ls "$hf_cache" 2>/dev/null \
+      | grep "^models--" | sed 's/^models--.*--//' \
+      | sort | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+    [[ -n "$cached" ]] && echo "    ${cached}"
+  else
+    echo "    (no HuggingFace cache found)"
+  fi
+  echo ""
 }
 
 # ── Plist writer ─────────────────────────────────────────────────────────────
@@ -427,7 +500,7 @@ except Exception as e:
   echo ""
 
   # ComfyUI inline status
-  echo -e "  ${BOLD}ComfyUI${RESET} (image generation — manual)"
+  echo -e "  ${BOLD}ComfyUI${RESET}"
   if comfyui_is_running; then
     local cpid; cpid=$(comfyui_get_pid)
     local cuptime; cuptime=$(ps -p "$cpid" -o etime= 2>/dev/null | tr -d ' ' || echo "?")
@@ -568,6 +641,7 @@ cmd_help() {
   echo -e "  ${BOLD}LOGS & MAINTENANCE${RESET}"
   echo "    logs        Show last 100 lines of llama-swap logs"
   echo "    logs -f     Follow logs in real time"
+  echo "    models      Show available models and download status"
   echo "    upgrade     Update llama-swap binary to latest release"
   echo "    version     Show llama-swap version"
   echo ""
@@ -598,6 +672,7 @@ case "$CMD" in
   logs)      cmd_logs "$@" ;;
   upgrade)   cmd_upgrade ;;
   version)   cmd_version ;;
+  models)    cmd_models ;;
   comfyui)   cmd_comfyui "$@" ;;
   help|--help|-h) cmd_help ;;
   *)

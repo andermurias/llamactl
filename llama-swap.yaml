@@ -94,16 +94,16 @@ models:
   # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
   # max-tokens is high because the <think>…</think> block alone can use
   # thousands of tokens before the visible answer starts.
-  # HF repo: mlx-community/Qwen3.5-9B-4bit  (~6 GB)
+  # HF repo: mlx-community/Qwen3.5-9B-MLX-4bit  (~6 GB)
   qwen3.5-9b:
     cmd: |
       /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-      --model mlx-community/Qwen3.5-9B-4bit
+      --model mlx-community/Qwen3.5-9B-MLX-4bit
       --host 127.0.0.1
       --port ${PORT}
       --log-level WARNING
       --max-tokens 32768
-    useModelName: "mlx-community/Qwen3.5-9B-4bit"
+    useModelName: "mlx-community/Qwen3.5-9B-MLX-4bit"
     ttl: 300
 
   # ── Fast · MLX — Qwen 2.5 3B (small, 128 k context) ─────────────────────
