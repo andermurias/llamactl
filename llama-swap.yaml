@@ -1,0 +1,168 @@
+# llama-swap configuration
+# Proxy on port 8080 — routes requests by model name, loads/unloads on demand.
+#
+# ── Backend options ──────────────────────────────────────────────────────────
+# • llama-server (llama.cpp)  — GGUF models.
+# • mlx_lm.server             — MLX models on Apple Silicon; same OpenAI API.
+#                               Models cached in ~/.cache/huggingface/ on first use.
+# • Kokoro-FastAPI             — OpenAI-compatible TTS, MPS-accelerated.
+#
+# ── Key llama-swap features used ─────────────────────────────────────────────
+# • ${PORT}       — auto-assigned port per model; proxy defaults to localhost:${PORT}
+# • useModelName  — rewrites the "model" field in every forwarded request so the
+#                   upstream server recognises its own name (critical for mlx_lm)
+# • ttl           — idle timeout in seconds before the model process is unloaded
+#
+# ── Context / parallelism ────────────────────────────────────────────────────
+#   --parallel 1 (llama.cpp) gives the full ctx-size to every single request.
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
+
+healthCheckTimeout: 120
+
+# Send both proxy events AND upstream model logs to stdout (captured to log file by launchd)
+logToStdout: "both"
+
+models:
+  # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
+  # --alias makes /v1/models report the same name clients use in requests.
+  gemma-3-12b-it:
+    cmd: |
+      llama-server
+      --model /Users/andermurias/AI/models/chat/gemma-3-12b-it-Q4_K_M.gguf
+      --alias gemma-3-12b-it
+      --host 127.0.0.1
+      --port ${PORT}
+      -ngl 99
+      --ctx-size 16384
+      --parallel 1
+      --log-file /Users/andermurias/AI/logs/inference.log
+    useModelName: "gemma-3-12b-it"
+    ttl: 600
+
+  # ── Embeddings · GGUF (llama.cpp) ────────────────────────────────────────
+  nomic-embed-text-v1.5:
+    cmd: |
+      llama-server
+      --model /Users/andermurias/AI/models/embeddings/nomic-embed-text-v1.5.Q8_0.gguf
+      --alias nomic-embed-text-v1.5
+      --host 127.0.0.1
+      --port ${PORT}
+      -ngl 99
+      --ctx-size 8192
+      --parallel 1
+      --embedding
+      --log-file /Users/andermurias/AI/logs/embeddings.log
+    useModelName: "nomic-embed-text-v1.5"
+    ttl: 120
+
+  # ── Chat · MLX — Gemma 3 12B (native Apple Silicon) ──────────────────────
+  # HF repo: mlx-community/gemma-3-12b-it-4bit  (~7 GB, downloads on first use)
+  gemma-3-12b-it-mlx:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/gemma-3-12b-it-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/gemma-3-12b-it-4bit"
+    ttl: 600
+
+  # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
+  # Latest Qwen generation (2025). Replaces qwen3-8b: better benchmarks,
+  # same built-in /think / /no-think CoT tokens.
+  # HF repo: mlx-community/Qwen3.5-9B-4bit  (~6 GB)
+  qwen3.5-9b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Qwen3.5-9B-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/Qwen3.5-9B-4bit"
+    ttl: 600
+
+  # ── Fast · MLX — Qwen 2.5 3B (small, 128 k context) ─────────────────────
+  # ~2 GB, loads in seconds, native 128 k token window.
+  # HF repo: mlx-community/Qwen2.5-3B-Instruct-4bit
+  qwen2.5-3b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Qwen2.5-3B-Instruct-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/Qwen2.5-3B-Instruct-4bit"
+    ttl: 300
+
+  # ── Coding · MLX — Qwen 2.5 Coder 14B ───────────────────────────────────
+  # Best coding model that fits in 16 GB. Fine-tuned on code: fill-in-middle,
+  # multi-file edits, repo-level context. No Qwen3.5-Coder exists yet.
+  # HF repo: mlx-community/Qwen2.5-Coder-14B-Instruct-4bit  (~8.3 GB)
+  qwen2.5-coder-14b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Qwen2.5-Coder-14B-Instruct-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit"
+    ttl: 600
+
+  # ── Agent / instructions · MLX — Qwen 2.5 14B ────────────────────────────
+  # NOT for chat — optimised for tool calling, function calling, MCP agents,
+  # and complex system-prompt following. Qwen2.5 has best-in-class tool-use
+  # benchmarks in the 14B range. Same 8.3 GB footprint as the coder above.
+  # HF repo: mlx-community/Qwen2.5-14B-Instruct-4bit  (~8.3 GB)
+  qwen2.5-14b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Qwen2.5-14B-Instruct-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/Qwen2.5-14B-Instruct-4bit"
+    ttl: 600
+
+  # ── Alternative · MLX — Microsoft Phi-4 14B ──────────────────────────────
+  # 14 B at 4-bit ≈ 8 GB; strong on STEM, reasoning and coding.
+  # HF repo: mlx-community/phi-4-4bit
+  phi-4:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/phi-4-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+    useModelName: "mlx-community/phi-4-4bit"
+    ttl: 600
+
+  # ── TTS — Kokoro 82M (OpenAI-compatible /v1/audio/speech) ────────────────
+  # MPS-accelerated on Apple Silicon. Model weights already at:
+  #   Kokoro-FastAPI/api/src/models/v1_0/
+  # useModelName rewrites "kokoro-tts" → "kokoro" which the server expects.
+  #
+  # Usage:  POST http://localhost:8080/v1/audio/speech
+  #   { "model": "kokoro-tts", "input": "Hello!", "voice": "af_heart" }
+  #
+  # ── Available voices ────────────────────────────────────────────────────
+  # American English (af_* / am_*)
+  #   af_heart ⭐  af_bella  af_aoede  af_jessica  af_kore  af_nicole
+  #   af_nova   af_river  af_sarah  af_sky
+  #   am_adam   am_echo   am_eric   am_fenrir   am_liam   am_michael
+  #   am_onyx   am_puck
+  # British English (bf_* / bm_*)
+  #   bf_alice  bf_emma   bf_lily   bf_v0isabella  (note: not "bf_isabella")
+  #   bm_daniel bm_fable  bm_george bm_lewis
+  # Other languages
+  #   ff_siwis (French)   ef_dora / em_alex (Spanish)
+  #   if_sara / im_nicola (Italian)   hf_alpha / hm_omega (Hindi)
+  #   jf_alpha / jm_kumo (Japanese)   zf_xiaoxiao / zm_yunxi (Chinese)
+  #   pf_dora / pm_alex (Portuguese)
+  # ────────────────────────────────────────────────────────────────────────
+  # Web UI: http://localhost:8080/upstream/kokoro-tts/web
+  kokoro-tts:
+    cmd: /Users/andermurias/AI/scripts/start-kokoro.sh ${PORT}
+    useModelName: "kokoro"
+    checkEndpoint: /health
+    ttl: 300

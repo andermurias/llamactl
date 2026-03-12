@@ -1,0 +1,47 @@
+# ── Large model files ─────────────────────────────────────────────────────────
+models/**/*.gguf
+models/**/*.bin
+models/**/*.safetensors
+models/**/*.pt
+models/**/*.pth
+
+# Keep directory structure (empty dirs needed by installer)
+!models/chat/.gitkeep
+!models/embeddings/.gitkeep
+
+# ── Runtime files ─────────────────────────────────────────────────────────────
+logs/*.log
+logs/*.pid
+
+# Keep logs directory
+!logs/.gitkeep
+
+# ── Kokoro-FastAPI — cloned fresh by install.sh ───────────────────────────────
+# Not tracked: it's a third-party repo; scripts/start-kokoro.sh is the only
+# custom piece and that IS tracked.
+Kokoro-FastAPI/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.local
