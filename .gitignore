@@ -24,6 +24,8 @@ Kokoro-FastAPI/
 # The ComfyUI directory itself is not tracked (large, third-party code).
 # Models placed inside it are downloaded by the user post-install.
 ComfyUI/
+!llamactl/cmd/comfyui/
+!llamactl/internal/comfyui/
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/

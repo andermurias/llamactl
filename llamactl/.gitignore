@@ -1,0 +1,9 @@
+# Go build output
+llamactl
+llamactl-*
+
+# Go test cache
+*.test
+
+# OS
+.DS_Store
