@@ -19,11 +19,12 @@ Use:   "comfyui",
 Short: "Manage ComfyUI image generation server",
 }
 cmd.AddCommand(
-newStartCmd(cfg),
-newStopCmd(cfg),
-newStatusCmd(cfg),
-newLogsCmd(cfg),
-)
+		newStartCmd(cfg),
+		newStopCmd(cfg),
+		newStatusCmd(cfg),
+		newLogsCmd(cfg),
+		newModelsCmd(cfg),
+	)
 return cmd
 }
 

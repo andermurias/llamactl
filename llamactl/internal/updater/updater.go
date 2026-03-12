@@ -1,108 +1,70 @@
-// Package updater provides git-based update checking and applying for llamactl.
+// Package updater checks for new llamactl releases on GitHub.
 package updater
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
+	"net/http"
 	"strings"
-
-	"github.com/andermurias/llamactl/internal/config"
+	"time"
 )
 
-// UpdateStatus contains the result of a git-based update check.
-type UpdateStatus struct {
-	HasUpdate     bool
-	CommitsBehind int
-	LocalCommit   string
-	RemoteCommit  string
-	Branch        string
+const (
+	// GitHubRepo is the owner/repo for GitHub API calls.
+	GitHubRepo = "andermurias/llamactl"
+	releaseURL = "https://api.github.com/repos/" + GitHubRepo + "/releases/latest"
+)
+
+// Release represents a minimal GitHub release object.
+type Release struct {
+	TagName string `json:"tag_name"`
+	HTMLURL string `json:"html_url"`
+	Name    string `json:"name"`
 }
 
-// Check performs a git fetch and compares local vs remote HEAD.
-func Check(cfg *config.Config) (*UpdateStatus, error) {
-	repo := cfg.AIDir
-	if out, err := gitCmd(repo, "fetch", "--quiet", "origin"); err != nil {
-		return nil, fmt.Errorf("git fetch: %w\n%s", err, out)
+var httpClient = &http.Client{Timeout: 5 * time.Second}
+
+// CheckLatest fetches the latest GitHub release and compares it to currentVersion.
+// Returns (latestRelease, hasUpdate, error).
+// A version "dev" is never considered outdated.
+func CheckLatest(currentVersion string) (Release, bool, error) {
+	if currentVersion == "dev" {
+		return Release{}, false, nil
 	}
-	branch, _ := gitOutput(repo, "rev-parse", "--abbrev-ref", "HEAD")
-	branch = strings.TrimSpace(branch)
-	behind, _ := commitCount(repo, "HEAD", "origin/"+branch)
-	local, _ := gitOutput(repo, "rev-parse", "--short", "HEAD")
-	remote, _ := gitOutput(repo, "rev-parse", "--short", "origin/"+branch)
-	return &UpdateStatus{
-		HasUpdate:     behind > 0,
-		CommitsBehind: behind,
-		LocalCommit:   strings.TrimSpace(local),
-		RemoteCommit:  strings.TrimSpace(remote),
-		Branch:        branch,
-	}, nil
+	return checkLatestFromURL(currentVersion, releaseURL)
 }
 
-// Apply pulls the latest commits and installs the binary from bin/llamactl.
-func Apply(cfg *config.Config) (int, error) {
-	repo := cfg.AIDir
-	branch, _ := gitOutput(repo, "rev-parse", "--abbrev-ref", "HEAD")
-	branch = strings.TrimSpace(branch)
-	behind, _ := commitCount(repo, "HEAD", "origin/"+branch)
-	if out, err := gitCmd(repo, "pull", "--ff-only", "origin", branch); err != nil {
-		return 0, fmt.Errorf("git pull: %w\n%s", err, out)
-	}
-	if err := installBinary(cfg); err != nil {
-		return behind, err
-	}
-	return behind, nil
-}
-
-// InstallBinary copies bin/llamactl from the repo to the system install path.
-func InstallBinary(cfg *config.Config) error { return installBinary(cfg) }
-
-// BinaryPath returns the path of the committed binary inside the repo.
-func BinaryPath(cfg *config.Config) string {
-	return filepath.Join(cfg.AIDir, "llamactl", "bin", "llamactl")
-}
-
-// InstallPath returns the system install path for the llamactl binary.
-func InstallPath() string {
-	if _, err := os.Stat("/opt/homebrew/bin"); err == nil {
-		return "/opt/homebrew/bin/llamactl"
-	}
-	return "/usr/local/bin/llamactl"
-}
-
-func installBinary(cfg *config.Config) error {
-	src := BinaryPath(cfg)
-	dst := InstallPath()
-	if _, err := os.Stat(src); err != nil {
-		return fmt.Errorf("binary not found at %s — build with: cd ~/AI/llamactl && make dist", src)
-	}
-	if out, err := exec.Command("cp", src, dst).CombinedOutput(); err != nil {
-		return fmt.Errorf("cp: %w\n%s", err, out)
-	}
-	return os.Chmod(dst, 0o755)
-}
-
-func commitCount(repo, from, to string) (int, error) {
-	out, err := gitOutput(repo, "rev-list", from+".."+to, "--count")
+// checkLatestFromURL is the testable core of CheckLatest.
+func checkLatestFromURL(currentVersion, url string) (Release, bool, error) {
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, err
+		return Release{}, false, err
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(out))
-	return n, err
+	req.Header.Set("User-Agent", "llamactl/"+currentVersion)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return Release{}, false, fmt.Errorf("network error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return Release{}, false, fmt.Errorf("GitHub API status %d", resp.StatusCode)
+	}
+
+	var rel Release
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return Release{}, false, err
+	}
+
+	hasUpdate := rel.TagName != "" &&
+		normalize(rel.TagName) != normalize(currentVersion)
+
+	return rel, hasUpdate, nil
 }
 
-func gitOutput(repo string, args ...string) (string, error) {
-	c := exec.Command("git", args...)
-	c.Dir = repo
-	out, err := c.Output()
-	return strings.TrimSpace(string(out)), err
-}
-
-func gitCmd(repo string, args ...string) (string, error) {
-	c := exec.Command("git", args...)
-	c.Dir = repo
-	out, err := c.CombinedOutput()
-	return string(out), err
+// normalize strips a leading "v" so "v1.2.3" == "1.2.3".
+func normalize(v string) string {
+	return strings.TrimPrefix(v, "v")
 }

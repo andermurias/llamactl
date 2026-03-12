@@ -5,78 +5,114 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
-	"github.com/andermurias/llamactl/internal/service"
+	"github.com/andermurias/llamactl/internal/launchd"
 	"github.com/andermurias/llamactl/internal/updater"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
 
 func newUpgradeCmd() *cobra.Command {
-	var checkOnly bool
+	var selfUpgrade bool
 	cmd := &cobra.Command{
 		Use:   "upgrade",
-		Short: "Pull updates from git and refresh the binary",
-		RunE:  func(cmd *cobra.Command, args []string) error { return runUpgrade(checkOnly) },
+		Short: "Upgrade llama-swap (and optionally llamactl itself)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpgrade(selfUpgrade)
+		},
 	}
-	cmd.Flags().BoolVar(&checkOnly, "check", false, "Only check for updates, do not apply")
+	cmd.Flags().BoolVar(&selfUpgrade, "self", false, "Also upgrade llamactl binary from GitHub releases")
 	return cmd
 }
 
-func runUpgrade(checkOnly bool) error {
-	pterm.DefaultSection.WithLevel(2).Println("Checking for updates")
-	sp, _ := pterm.DefaultSpinner.WithText("Fetching from origin...").Start()
-	status, err := updater.Check(cfg)
-	if err != nil {
-		sp.Fail(err.Error())
-		return err
-	}
-	if !status.HasUpdate {
-		sp.Success(fmt.Sprintf("Up to date  (%s on %s)", status.LocalCommit, status.Branch))
-		return nil
-	}
-	sp.Warning(fmt.Sprintf("%d commit(s) behind  (local: %s → remote: %s on %s)",
-		status.CommitsBehind, status.LocalCommit, status.RemoteCommit, status.Branch))
-
-	if checkOnly {
-		fmt.Println()
-		pterm.Info.Println("Run 'llamactl upgrade' to apply")
-		return nil
-	}
-
-	pterm.DefaultSection.WithLevel(2).Println("Applying updates")
-	pullSp, _ := pterm.DefaultSpinner.WithText("Running git pull...").Start()
-	pulled, err := updater.Apply(cfg)
-	if err != nil {
-		pullSp.Fail(err.Error())
-		return err
-	}
-	pullSp.Success(fmt.Sprintf("Pulled %d commit(s) — binary updated at %s", pulled, updater.InstallPath()))
-
+func runUpgrade(selfUpgrade bool) error {
 	pterm.DefaultSection.WithLevel(2).Println("Upgrading llama-swap")
 	script := filepath.Join(cfg.AIDir, "scripts", "install-llama-swap.sh")
 	var upgradeCmd *exec.Cmd
-	if _, serr := os.Stat(script); serr == nil {
+	if fileExists(script) {
 		upgradeCmd = exec.Command("bash", script)
 	} else {
 		upgradeCmd = exec.Command("brew", "upgrade", "llama-swap")
 	}
 	upgradeCmd.Stdout = os.Stdout
 	upgradeCmd.Stderr = os.Stderr
-	lsSp, _ := pterm.DefaultSpinner.WithText("Upgrading llama-swap...").Start()
 	if err := upgradeCmd.Run(); err != nil {
-		lsSp.Warning("llama-swap upgrade skipped: " + err.Error())
-	} else {
-		lsSp.Success("llama-swap upgraded")
+		return fmt.Errorf("llama-swap upgrade failed: %w", err)
 	}
 
-	if s := service.GetStatus(cfg); s.IsRunning {
-		pterm.Info.Println("Restarting llamaswap service...")
+	if launchd.IsRunning(cfg) {
+		pterm.Info.Println("Restarting service to apply upgrade\u2026")
 		_ = runStop()
 		_ = runStart()
 	}
+	pterm.Success.Println("llama-swap upgraded")
 
-	fmt.Println()
-	pterm.Success.Println("All updates applied successfully")
+	if selfUpgrade {
+		pterm.DefaultSection.WithLevel(2).Println("Upgrading llamactl")
+		if err := selfUpgradeBinary(); err != nil {
+			pterm.Error.Println(err)
+			return err
+		}
+	}
+	return nil
+}
+
+// selfUpgradeBinary downloads the latest llamactl binary from GitHub releases
+// and replaces the current binary.
+func selfUpgradeBinary() error {
+	spinner, _ := pterm.DefaultSpinner.WithText("Checking latest release\u2026").Start()
+	rel, hasUpdate, err := updater.CheckLatest(Version)
+	if err != nil {
+		spinner.Fail("Could not check GitHub: " + err.Error())
+		return err
+	}
+	if !hasUpdate {
+		spinner.Success("Already up to date (" + Version + ")")
+		return nil
+	}
+	spinner.UpdateText(fmt.Sprintf("Downloading %s\u2026", rel.TagName))
+
+	arch := runtime.GOARCH
+	if arch == "amd64" {
+		arch = "x86_64"
+	}
+	assetName := fmt.Sprintf("llamactl_%s_Darwin_%s.tar.gz", rel.TagName, arch)
+	downloadURL := fmt.Sprintf(
+		"https://github.com/%s/releases/download/%s/%s",
+		updater.GitHubRepo, rel.TagName, assetName,
+	)
+
+	tmpDir, err := os.MkdirTemp("", "llamactl-upgrade-*")
+	if err != nil {
+		spinner.Fail("temp dir: " + err.Error())
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	tarPath := filepath.Join(tmpDir, "llamactl.tar.gz")
+	if out, err := exec.Command("curl", "-fsSL", "-o", tarPath, downloadURL).CombinedOutput(); err != nil {
+		spinner.Fail(fmt.Sprintf("download failed: %s\n%s", err, out))
+		return err
+	}
+	if out, err := exec.Command("tar", "-xzf", tarPath, "-C", tmpDir).CombinedOutput(); err != nil {
+		spinner.Fail(fmt.Sprintf("extract failed: %s\n%s", err, out))
+		return err
+	}
+
+	newBin := filepath.Join(tmpDir, "llamactl")
+	currentBin, _ := os.Executable()
+	if err := os.Rename(newBin, currentBin); err != nil {
+		if out, err2 := exec.Command("cp", newBin, currentBin).CombinedOutput(); err2 != nil {
+			spinner.Fail(fmt.Sprintf("replace binary failed: %s\n%s", err2, out))
+			return err2
+		}
+	}
+	if err := os.Chmod(currentBin, 0o755); err != nil {
+		spinner.Fail("chmod: " + err.Error())
+		return err
+	}
+
+	spinner.Success(fmt.Sprintf("llamactl upgraded to %s", rel.TagName))
 	return nil
 }
