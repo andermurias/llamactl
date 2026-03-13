@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,6 +59,11 @@ func GetStatus(cfg *config.Config) *LlamaSwapStatus {
 	}
 
 	s.PID = launchd.GetPID(svc)
+	// launchd sometimes reports state=not-running (e.g. after a previous crash)
+	// even while the process is alive.  Fall back to pgrep as a second source.
+	if s.PID == 0 {
+		s.PID = pgrepFirst("llama-swap")
+	}
 	s.IsRunning = s.PID > 0
 	if s.IsRunning {
 		s.Uptime = processUptime(s.PID)
@@ -220,4 +226,21 @@ func processUptime(pid int) string {
 		return "?"
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// pgrepFirst returns the PID of the first running process whose argv[0]
+// matches name, or 0 if none found. Used as a fallback when launchd
+// reports no PID despite the process being alive (can happen after a
+// prior crash while launchd resets its internal state).
+func pgrepFirst(name string) int {
+	out, err := exec.Command("pgrep", "-x", name).Output()
+	if err != nil {
+		return 0
+	}
+	lines := strings.Fields(strings.TrimSpace(string(out)))
+	if len(lines) == 0 {
+		return 0
+	}
+	pid, _ := strconv.Atoi(lines[0])
+	return pid
 }
