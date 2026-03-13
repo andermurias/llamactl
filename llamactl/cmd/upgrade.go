@@ -5,10 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"strings"
 
 	"github.com/andermurias/llamactl/internal/launchd"
-	"github.com/andermurias/llamactl/internal/updater"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 )
@@ -58,61 +57,61 @@ func runUpgrade(selfUpgrade bool) error {
 	return nil
 }
 
-// selfUpgradeBinary downloads the latest llamactl binary from GitHub releases
-// and replaces the current binary.
+// selfUpgradeBinary pulls the latest commit from the git repo and installs
+// the pre-built binary from llamactl/bin/llamactl.
+//
+// Repo layout (git root = ~/AI):
+//
+//	llamactl/bin/llamactl   — pre-built binary committed to git
+//	scripts/llamactl        — deployed binary (in $PATH via symlink)
 func selfUpgradeBinary() error {
-	spinner, _ := pterm.DefaultSpinner.WithText("Checking latest release\u2026").Start()
-	rel, hasUpdate, err := updater.CheckLatest(Version)
-	if err != nil {
-		spinner.Fail("Could not check GitHub: " + err.Error())
+	repoDir := cfg.AIDir // ~/AI is the git repository root
+
+	// ── 1. Fetch to check for updates ────────────────────────────────────
+	spinner, _ := pterm.DefaultSpinner.WithText("Checking for updates\u2026").Start()
+	if out, err := exec.Command("git", "-C", repoDir, "fetch", "--quiet").CombinedOutput(); err != nil {
+		spinner.Fail(fmt.Sprintf("git fetch failed: %s\n%s", err, out))
 		return err
 	}
-	if !hasUpdate {
+
+	countOut, err := exec.Command("git", "-C", repoDir, "rev-list", "HEAD..origin/main", "--count").Output()
+	if err != nil {
+		spinner.Fail("git rev-list failed: " + err.Error())
+		return err
+	}
+	pending := strings.TrimSpace(string(countOut))
+	if pending == "0" {
 		spinner.Success("Already up to date (" + Version + ")")
 		return nil
 	}
-	spinner.UpdateText(fmt.Sprintf("Downloading %s\u2026", rel.TagName))
+	spinner.UpdateText(fmt.Sprintf("Pulling %s new commit(s)\u2026", pending))
 
-	arch := runtime.GOARCH
-	if arch == "amd64" {
-		arch = "x86_64"
-	}
-	assetName := fmt.Sprintf("llamactl_%s_Darwin_%s.tar.gz", rel.TagName, arch)
-	downloadURL := fmt.Sprintf(
-		"https://github.com/%s/releases/download/%s/%s",
-		updater.GitHubRepo, rel.TagName, assetName,
-	)
-
-	tmpDir, err := os.MkdirTemp("", "llamactl-upgrade-*")
-	if err != nil {
-		spinner.Fail("temp dir: " + err.Error())
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tarPath := filepath.Join(tmpDir, "llamactl.tar.gz")
-	if out, err := exec.Command("curl", "-fsSL", "-o", tarPath, downloadURL).CombinedOutput(); err != nil {
-		spinner.Fail(fmt.Sprintf("download failed: %s\n%s", err, out))
-		return err
-	}
-	if out, err := exec.Command("tar", "-xzf", tarPath, "-C", tmpDir).CombinedOutput(); err != nil {
-		spinner.Fail(fmt.Sprintf("extract failed: %s\n%s", err, out))
+	// ── 2. Pull ───────────────────────────────────────────────────────────
+	if out, err := exec.Command("git", "-C", repoDir, "pull", "--ff-only", "origin", "main").CombinedOutput(); err != nil {
+		spinner.Fail(fmt.Sprintf("git pull failed: %s\n%s", err, out))
 		return err
 	}
 
-	newBin := filepath.Join(tmpDir, "llamactl")
-	currentBin, _ := os.Executable()
-	if err := os.Rename(newBin, currentBin); err != nil {
-		if out, err2 := exec.Command("cp", newBin, currentBin).CombinedOutput(); err2 != nil {
-			spinner.Fail(fmt.Sprintf("replace binary failed: %s\n%s", err2, out))
-			return err2
-		}
+	// ── 3. Install the updated binary ────────────────────────────────────
+	newBin := filepath.Join(repoDir, "llamactl", "bin", "llamactl")
+	if _, err := os.Stat(newBin); err != nil {
+		spinner.Fail("pre-built binary not found at " + newBin)
+		return fmt.Errorf("binary not found: %w", err)
 	}
-	if err := os.Chmod(currentBin, 0o755); err != nil {
+
+	deployBin := filepath.Join(repoDir, "scripts", "llamactl")
+	if out, err := exec.Command("cp", newBin, deployBin).CombinedOutput(); err != nil {
+		spinner.Fail(fmt.Sprintf("copy binary failed: %s\n%s", err, out))
+		return err
+	}
+	if err := os.Chmod(deployBin, 0o755); err != nil {
 		spinner.Fail("chmod: " + err.Error())
 		return err
 	}
+	// Ad-hoc code sign required on macOS after replacing a binary (--force replaces existing).
+	_ = exec.Command("codesign", "--force", "-s", "-", deployBin).Run()
 
-	spinner.Success(fmt.Sprintf("llamactl upgraded to %s", rel.TagName))
+	spinner.Success(fmt.Sprintf("llamactl updated (%s new commit(s) pulled)", pending))
+	pterm.Info.Println("Restart any running services to apply updates if needed.")
 	return nil
 }
