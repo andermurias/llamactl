@@ -51,18 +51,19 @@ func GetStatus(cfg *config.Config) *LlamaSwapStatus {
 		return s
 	}
 
-	s.IsLoaded = launchd.IsLoaded(cfg)
+	svc := launchd.LlamaSwapSvc(cfg)
+	s.IsLoaded = launchd.IsLoaded(svc)
 	if !s.IsLoaded {
 		return s
 	}
 
-	s.PID = launchd.GetPID(cfg)
+	s.PID = launchd.GetPID(svc)
 	s.IsRunning = s.PID > 0
 	if s.IsRunning {
 		s.Uptime = processUptime(s.PID)
 	}
 
-	s.AutoStart = launchd.ReadAutoStart(cfg)
+	s.AutoStart = launchd.ReadAutoStartCfg(cfg)
 	s.APIReachable = llamaswap.IsReachable(cfg)
 	if s.APIReachable {
 		s.LoadedModels, _ = llamaswap.GetRunning(cfg)
@@ -82,19 +83,19 @@ func Start(cfg *config.Config) (int, error) {
 		}
 	}
 
-	if launchd.IsRunning(cfg) {
-		return launchd.GetPID(cfg), nil
+	svc := launchd.LlamaSwapSvc(cfg)
+	if launchd.IsRunning(svc) {
+		return launchd.GetPID(svc), nil
 	}
 
-	if err := launchd.Kickstart(cfg); err != nil {
+	if err := launchd.Kickstart(svc); err != nil {
 		return 0, fmt.Errorf("kickstart: %w", err)
 	}
 
-	// Poll up to 16 seconds for the process to appear.
 	for i := 0; i < 8; i++ {
 		time.Sleep(2 * time.Second)
-		if launchd.IsRunning(cfg) {
-			return launchd.GetPID(cfg), nil
+		if launchd.IsRunning(svc) {
+			return launchd.GetPID(svc), nil
 		}
 	}
 
@@ -103,14 +104,14 @@ func Start(cfg *config.Config) (int, error) {
 
 // Stop sends SIGTERM to the running service via launchd.
 func Stop(cfg *config.Config) error {
-	if !launchd.IsLoaded(cfg) {
+	svc := launchd.LlamaSwapSvc(cfg)
+	if !launchd.IsLoaded(svc) {
 		return fmt.Errorf("service is not loaded")
 	}
-	return launchd.Kill(cfg, "SIGTERM")
+	return launchd.KillSvc(svc, "SIGTERM")
 }
 
 // Install writes the launchd plist and bootstraps the service (does NOT start it).
-// Set autoStart=true to write RunAtLoad=true.
 func Install(cfg *config.Config, autoStart bool) error {
 	if !fileExists(cfg.LlamaSwapBin) {
 		return fmt.Errorf("llama-swap binary not found at %s\n  Install with: brew install llama-swap", cfg.LlamaSwapBin)
@@ -119,16 +120,17 @@ func Install(cfg *config.Config, autoStart bool) error {
 		return fmt.Errorf("config not found at %s", cfg.ConfigFile)
 	}
 
-	if err := launchd.WritePlist(cfg, autoStart); err != nil {
+	if err := launchd.WriteLlamaSwapPlist(cfg, autoStart); err != nil {
 		return fmt.Errorf("write plist: %w", err)
 	}
 
-	if launchd.IsLoaded(cfg) {
-		_ = launchd.Bootout(cfg)
+	svc := launchd.LlamaSwapSvc(cfg)
+	if launchd.IsLoaded(svc) {
+		_ = launchd.Bootout(svc)
 		time.Sleep(time.Second)
 	}
 
-	if err := launchd.Bootstrap(cfg); err != nil {
+	if err := launchd.Bootstrap(svc); err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
 	return nil
@@ -136,34 +138,37 @@ func Install(cfg *config.Config, autoStart bool) error {
 
 // Uninstall removes the service from launchd (does not delete the plist file).
 func Uninstall(cfg *config.Config) error {
-	if launchd.IsLoaded(cfg) {
-		_ = launchd.Bootout(cfg)
+	svc := launchd.LlamaSwapSvc(cfg)
+	if launchd.IsLoaded(svc) {
+		_ = launchd.Bootout(svc)
 	}
 	return nil
 }
 
 // Enable sets RunAtLoad=true and reloads the service.
 func Enable(cfg *config.Config) error {
-	if err := launchd.WritePlist(cfg, true); err != nil {
+	if err := launchd.WriteLlamaSwapPlist(cfg, true); err != nil {
 		return err
 	}
-	if launchd.IsLoaded(cfg) {
-		_ = launchd.Bootout(cfg)
+	svc := launchd.LlamaSwapSvc(cfg)
+	if launchd.IsLoaded(svc) {
+		_ = launchd.Bootout(svc)
 		time.Sleep(time.Second)
 	}
-	return launchd.Bootstrap(cfg)
+	return launchd.Bootstrap(svc)
 }
 
 // Disable sets RunAtLoad=false and reloads the service.
 func Disable(cfg *config.Config) error {
-	if err := launchd.WritePlist(cfg, false); err != nil {
+	if err := launchd.WriteLlamaSwapPlist(cfg, false); err != nil {
 		return err
 	}
-	if launchd.IsLoaded(cfg) {
-		_ = launchd.Bootout(cfg)
+	svc := launchd.LlamaSwapSvc(cfg)
+	if launchd.IsLoaded(svc) {
+		_ = launchd.Bootout(svc)
 		time.Sleep(time.Second)
 	}
-	return launchd.Bootstrap(cfg)
+	return launchd.Bootstrap(svc)
 }
 
 // ── Models ─────────────────────────────────────────────────────────────────

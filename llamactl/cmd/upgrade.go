@@ -41,7 +41,7 @@ func runUpgrade(selfUpgrade bool) error {
 		return fmt.Errorf("llama-swap upgrade failed: %w", err)
 	}
 
-	if launchd.IsRunning(cfg) {
+	if launchd.IsRunning(launchd.LlamaSwapSvc(cfg)) {
 		pterm.Info.Println("Restarting service to apply upgrade\u2026")
 		_ = runStop()
 		_ = runStart()

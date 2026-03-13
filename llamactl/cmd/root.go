@@ -13,6 +13,7 @@ import (
 	"os"
 
 	cmdcomfyui "github.com/andermurias/llamactl/cmd/comfyui"
+	cmdweb "github.com/andermurias/llamactl/cmd/web"
 	"github.com/andermurias/llamactl/internal/config"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
@@ -69,5 +70,6 @@ func init() {
 		newUpgradeCmd(),
 		newVersionCmd(),
 		cmdcomfyui.NewCmd(cfg),
+		cmdweb.NewCmd(cfg),
 	)
 }

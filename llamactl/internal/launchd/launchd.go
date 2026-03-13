@@ -12,20 +12,41 @@ import (
 	"github.com/andermurias/llamactl/internal/config"
 )
 
-// ServiceTarget returns "gui/<uid>/<label>"
-func ServiceTarget(cfg *config.Config) string {
-	return fmt.Sprintf("gui/%d/%s", cfg.UserID, cfg.Label)
+// Svc holds the minimal info launchd functions need for any LaunchAgent service.
+// Build one with LlamaSwapSvc(cfg) or WebSvc(cfg).
+type Svc struct {
+	Label     string
+	PlistPath string
+	LogFile   string
+	UserID    int
 }
 
+// LlamaSwapSvc returns a Svc descriptor for the llama-swap LaunchAgent.
+func LlamaSwapSvc(cfg *config.Config) Svc {
+	return Svc{cfg.Label, cfg.PlistPath, cfg.LogFile, cfg.UserID}
+}
+
+// WebSvc returns a Svc descriptor for the llamactl-web LaunchAgent.
+func WebSvc(cfg *config.Config) Svc {
+	return Svc{cfg.WebLabel, cfg.WebPlistPath, cfg.WebLogFile, cfg.UserID}
+}
+
+// Target returns the "gui/<uid>/<label>" service target string.
+func Target(svc Svc) string {
+	return fmt.Sprintf("gui/%d/%s", svc.UserID, svc.Label)
+}
+
+// ServiceTarget is a backwards-compat alias for the llama-swap service.
+func ServiceTarget(cfg *config.Config) string { return Target(LlamaSwapSvc(cfg)) }
+
 // IsLoaded returns true if the service is bootstrapped into launchd.
-func IsLoaded(cfg *config.Config) bool {
-	err := exec.Command("launchctl", "print", ServiceTarget(cfg)).Run()
-	return err == nil
+func IsLoaded(svc Svc) bool {
+	return exec.Command("launchctl", "print", Target(svc)).Run() == nil
 }
 
 // IsRunning returns true if the service process is actively running.
-func IsRunning(cfg *config.Config) bool {
-	out, err := exec.Command("launchctl", "print", ServiceTarget(cfg)).Output()
+func IsRunning(svc Svc) bool {
+	out, err := exec.Command("launchctl", "print", Target(svc)).Output()
 	if err != nil {
 		return false
 	}
@@ -33,13 +54,13 @@ func IsRunning(cfg *config.Config) bool {
 }
 
 // GetPID returns the PID of the running service, or 0 if not running.
-func GetPID(cfg *config.Config) int {
-	out, err := exec.Command("launchctl", "print", ServiceTarget(cfg)).Output()
+func GetPID(svc Svc) int {
+	out, err := exec.Command("launchctl", "print", Target(svc)).Output()
 	if err != nil {
 		return 0
 	}
-	re := regexp.MustCompile(`\s+pid = (\d+)`)
-	m := re.FindStringSubmatch(string(out))
+	pattern := regexp.MustCompile(`\s+pid = (\d+)`)
+	m := pattern.FindStringSubmatch(string(out))
 	if m == nil {
 		return 0
 	}
@@ -47,48 +68,43 @@ func GetPID(cfg *config.Config) int {
 	return pid
 }
 
-// GetExitStatus returns the last exit status of the service.
-func GetExitStatus(cfg *config.Config) string {
-	out, err := exec.Command("launchctl", "print", ServiceTarget(cfg)).Output()
-	if err != nil {
-		return "?"
-	}
-	re := regexp.MustCompile(`last exit.*?(\d+)`)
-	m := re.FindStringSubmatch(string(out))
-	if m == nil {
-		return "?"
-	}
-	return m[1]
-}
-
 // Bootstrap loads the plist into launchd.
-func Bootstrap(cfg *config.Config) error {
+func Bootstrap(svc Svc) error {
 	return exec.Command("launchctl", "bootstrap",
-		fmt.Sprintf("gui/%d", cfg.UserID), cfg.PlistPath).Run()
+		fmt.Sprintf("gui/%d", svc.UserID), svc.PlistPath).Run()
 }
 
-// Bootout unloads the service from launchd.
-func Bootout(cfg *config.Config) error {
+// Bootout unloads the service from launchd (best-effort).
+func Bootout(svc Svc) error {
 	err := exec.Command("launchctl", "bootout",
-		fmt.Sprintf("gui/%d", cfg.UserID), cfg.PlistPath).Run()
+		fmt.Sprintf("gui/%d", svc.UserID), svc.PlistPath).Run()
 	if err != nil {
-		_ = exec.Command("launchctl", "bootout", ServiceTarget(cfg)).Run()
+		_ = exec.Command("launchctl", "bootout", Target(svc)).Run()
 	}
 	return nil
 }
 
 // Kickstart starts the service.
-func Kickstart(cfg *config.Config) error {
-	return exec.Command("launchctl", "kickstart",
-		fmt.Sprintf("gui/%d/%s", cfg.UserID, cfg.Label)).Run()
+func Kickstart(svc Svc) error {
+	return exec.Command("launchctl", "kickstart", Target(svc)).Run()
 }
 
-// Kill sends a signal to the service.
-func Kill(cfg *config.Config, signal string) error {
-	return exec.Command("launchctl", "kill", signal, ServiceTarget(cfg)).Run()
+// KillSvc sends a signal to the service.
+func KillSvc(svc Svc, signal string) error {
+	return exec.Command("launchctl", "kill", signal, Target(svc)).Run()
 }
 
-var plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
+// ReadAutoStart returns the RunAtLoad value from the on-disk plist.
+func ReadAutoStart(svc Svc) bool {
+	out, err := exec.Command("/usr/libexec/PlistBuddy",
+		"-c", "Print :RunAtLoad", svc.PlistPath).Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "true"
+}
+
+var llamaSwapPlistTmpl = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -137,8 +153,8 @@ var plistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-// WritePlist writes the LaunchAgent plist to cfg.PlistPath.
-func WritePlist(cfg *config.Config, autoStart bool) error {
+// WriteLlamaSwapPlist writes the llama-swap LaunchAgent plist.
+func WriteLlamaSwapPlist(cfg *config.Config, autoStart bool) error {
 	if err := os.MkdirAll(cfg.LogDir, 0o755); err != nil {
 		return err
 	}
@@ -148,12 +164,32 @@ func WritePlist(cfg *config.Config, autoStart bool) error {
 		Home      string
 		RunAtLoad string
 	}{cfg, home, boolStr(autoStart)}
+	return writePlist(cfg.PlistPath, llamaSwapPlistTmpl, data)
+}
 
-	tmpl, err := template.New("plist").Parse(plistTemplate)
+// WriteWebPlist writes the llamactl-web LaunchAgent plist.
+// The plist launches "llamactl web serve --port <WebPort>".
+func WriteWebPlist(cfg *config.Config, autoStart bool) error {
+	if err := os.MkdirAll(cfg.LogDir, 0o755); err != nil {
+		return err
+	}
+	llamactlBin, _ := os.Executable()
+	home, _ := os.UserHomeDir()
+	data := struct {
+		*config.Config
+		LlamactlBin string
+		Home        string
+		RunAtLoad   string
+	}{cfg, llamactlBin, home, boolStr(autoStart)}
+	return writePlist(cfg.WebPlistPath, webPlistTmpl, data)
+}
+
+func writePlist(path, tmplStr string, data any) error {
+	tmpl, err := template.New("plist").Parse(tmplStr)
 	if err != nil {
 		return err
 	}
-	f, err := os.Create(cfg.PlistPath)
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -168,12 +204,55 @@ func boolStr(b bool) string {
 	return "false"
 }
 
-// ReadAutoStart returns the current RunAtLoad value from the plist.
-func ReadAutoStart(cfg *config.Config) bool {
-	out, err := exec.Command("/usr/libexec/PlistBuddy",
-		"-c", "Print :RunAtLoad", cfg.PlistPath).Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "true"
+// ReadAutoStartCfg reads RunAtLoad from the llama-swap plist (cfg-based helper).
+func ReadAutoStartCfg(cfg *config.Config) bool {
+	return ReadAutoStart(LlamaSwapSvc(cfg))
 }
+
+var webPlistTmpl = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{{.WebLabel}}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{.LlamactlBin}}</string>
+        <string>web</string>
+        <string>serve</string>
+        <string>--port</string>
+        <string>{{.WebPort}}</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>{{.Home}}</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>{{.AIDir}}</string>
+
+    <key>StandardOutPath</key>
+    <string>{{.WebLogFile}}</string>
+    <key>StandardErrorPath</key>
+    <string>{{.WebLogFile}}</string>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>RunAtLoad</key>
+    <{{.RunAtLoad}}/>
+</dict>
+</plist>
+`

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-950 text-gray-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llamactl — AI Stack</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <style>
+    .dot-green  { background: #22c55e; }
+    .dot-red    { background: #ef4444; }
+    .dot-yellow { background: #eab308; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+    .btn { cursor: pointer; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem;
+           font-weight: 600; transition: opacity .15s; border: none; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-green  { background: #16a34a; color: #fff; }
+    .btn-red    { background: #b91c1c; color: #fff; }
+    .btn-blue   { background: #2563eb; color: #fff; }
+    .btn-gray   { background: #374151; color: #e5e7eb; }
+    .log-box    { font-family: monospace; font-size: 0.72rem; line-height: 1.5;
+                  background: #0f172a; padding: 12px; border-radius: 8px;
+                  max-height: 340px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+    .card       { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; }
+    .badge      { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+    .badge-green  { background: #14532d; color: #86efac; }
+    .badge-red    { background: #7f1d1d; color: #fca5a5; }
+    .badge-gray   { background: #1f2937; color: #9ca3af; }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-white">🦙 llamactl</h1>
+      <p class="text-gray-400 text-sm mt-0.5">Local AI Stack Manager</p>
+    </div>
+    <button class="btn btn-gray"
+            hx-get="/"
+            hx-target="body"
+            hx-swap="outerHTML"
+            title="Refresh">
+      ↻ Refresh
+    </button>
+  </div>
+
+  <!-- ── Status cards ────────────────────────────────────────────────────── -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+
+    <!-- llama-swap card -->
+    <div class="card">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          {{if .LlamaSwap.IsRunning}}
+            <span class="dot dot-green"></span>
+            <span class="font-semibold text-white">llama-swap</span>
+            <span class="badge badge-green">running</span>
+          {{else if .LlamaSwap.IsInstalled}}
+            <span class="dot dot-yellow"></span>
+            <span class="font-semibold text-white">llama-swap</span>
+            <span class="badge badge-red">stopped</span>
+          {{else}}
+            <span class="dot dot-red"></span>
+            <span class="font-semibold text-white">llama-swap</span>
+            <span class="badge badge-gray">not installed</span>
+          {{end}}
+        </div>
+        <div class="flex gap-2">
+          {{if .LlamaSwap.IsRunning}}
+            <button class="btn btn-blue"
+                    hx-post="/api/llamaswap/restart"
+                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+              ↺ Restart
+            </button>
+            <button class="btn btn-red"
+                    hx-post="/api/llamaswap/stop"
+                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+              ■ Stop
+            </button>
+          {{else}}
+            <button class="btn btn-green"
+                    hx-post="/api/llamaswap/start"
+                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
+              ▶ Start
+            </button>
+          {{end}}
+        </div>
+      </div>
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
+        {{if .LlamaSwap.IsRunning}}
+          <dt>PID</dt>       <dd class="text-gray-200">{{.LlamaSwap.PID}}</dd>
+          <dt>Uptime</dt>    <dd class="text-gray-200">{{.LlamaSwap.Uptime}}</dd>
+        {{end}}
+        <dt>API</dt>       <dd class="text-gray-200">{{.LlamaSwap.APIAddr}}</dd>
+        <dt>Auto-start</dt><dd class="text-gray-200">{{if .LlamaSwap.AutoStart}}✓ enabled{{else}}disabled{{end}}</dd>
+        {{if .LlamaSwap.APIReachable}}
+          <dt>Loaded</dt>   <dd class="text-gray-200">{{len .LlamaSwap.LoadedModels}} model(s) in memory</dd>
+        {{end}}
+      </dl>
+    </div>
+
+    <!-- ComfyUI card -->
+    <div class="card">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          {{if .ComfyUI.IsRunning}}
+            <span class="dot dot-green"></span>
+            <span class="font-semibold text-white">ComfyUI</span>
+            <span class="badge badge-green">running</span>
+          {{else}}
+            <span class="dot dot-red"></span>
+            <span class="font-semibold text-white">ComfyUI</span>
+            <span class="badge badge-red">stopped</span>
+          {{end}}
+        </div>
+        <div class="flex gap-2">
+          {{if .ComfyUI.IsRunning}}
+            <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-blue">↗ Open</a>
+            <button class="btn btn-red"
+                    hx-post="/api/comfyui/stop"
+                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+              ■ Stop
+            </button>
+          {{else}}
+            <button class="btn btn-green"
+                    hx-post="/api/comfyui/start"
+                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),5000)">
+              ▶ Start
+            </button>
+          {{end}}
+        </div>
+      </div>
+      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
+        {{if .ComfyUI.IsRunning}}
+          <dt>PID</dt>    <dd class="text-gray-200">{{.ComfyUI.PID}}</dd>
+          <dt>Uptime</dt> <dd class="text-gray-200">{{.ComfyUI.Uptime}}</dd>
+          <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" class="text-blue-400 underline">{{.ComfyUI.URL}}</a></dd>
+        {{else}}
+          <dt>Port</dt>   <dd class="text-gray-200">{{.ComfyPort}}</dd>
+          <dt>Note</dt>   <dd class="text-gray-500">starts on demand</dd>
+        {{end}}
+      </dl>
+    </div>
+  </div>
+
+  <!-- ── Models table ────────────────────────────────────────────────────── -->
+  <div class="card mb-6">
+    <h2 class="font-semibold text-white mb-3">Models
+      <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
+    </h2>
+    {{if .Models.APIReachable}}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-gray-500 border-b border-gray-800">
+              <th class="text-left pb-2 pr-4">Model ID</th>
+              <th class="text-left pb-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Models.APIModels}}
+            <tr class="border-b border-gray-900 hover:bg-gray-800/30">
+              <td class="py-2 pr-4 text-gray-200 font-mono text-xs">{{.ID}}</td>
+              <td class="py-2">
+                {{if index $.Models.LoadedIDs .ID}}
+                  <span class="badge badge-green">● loaded</span>
+                {{else}}
+                  <span class="badge badge-gray">unloaded</span>
+                {{end}}
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+    {{else}}
+      <p class="text-gray-500 text-sm">llama-swap is not reachable — start it to see models.</p>
+    {{end}}
+  </div>
+
+  <!-- ── Logs panel ──────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-white">Logs</h2>
+      <div class="flex gap-2">
+        <button class="btn btn-gray" id="log-ls-btn"
+                onclick="loadLogs('llamaswap')">llama-swap</button>
+        <button class="btn btn-gray" id="log-cu-btn"
+                onclick="loadLogs('comfyui')">ComfyUI</button>
+      </div>
+    </div>
+    <div id="log-container" class="log-box text-gray-400">
+      Click a service above to view logs.
+    </div>
+    <p class="text-gray-600 text-xs mt-2">Auto-refreshes every 5 s when a service is selected.</p>
+  </div>
+
+  <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
+  <script>
+    let currentSvc = null;
+    let logInterval = null;
+
+    async function loadLogs(svc) {
+      currentSvc = svc;
+      if (logInterval) clearInterval(logInterval);
+
+      const render = async () => {
+        const resp = await fetch(`/api/logs?service=${svc}&lines=150`);
+        const data = await resp.json();
+        const box = document.getElementById('log-container');
+        if (data.lines && data.lines.length) {
+          box.textContent = data.lines.join('\n');
+          box.scrollTop = box.scrollHeight;
+        } else if (data.error) {
+          box.textContent = 'Error: ' + data.error;
+        } else {
+          box.textContent = '(no log entries)';
+        }
+      };
+
+      await render();
+      logInterval = setInterval(render, 5000);
+    }
+
+    // Page refresh via HTMX event
+    document.body.addEventListener('refresh', () => {
+      htmx.ajax('GET', '/', {target: 'body', swap: 'outerHTML'}).then(() => {
+        if (currentSvc) loadLogs(currentSvc);
+      });
+    });
+  </script>
+</body>
+</html>

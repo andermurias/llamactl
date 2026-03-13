@@ -15,7 +15,7 @@ type Config struct {
 	LlamaSwapBin string // /opt/homebrew/bin/llama-swap
 	LogDir       string // ~/AI/logs
 	LogFile      string // ~/AI/logs/llama-swap.log
-	Listen       string // 127.0.0.1:8080
+	Listen       string // 0.0.0.0:8080
 	UserID       int    // current user ID
 
 	// ComfyUI
@@ -24,6 +24,12 @@ type Config struct {
 	ComfyUIPort   string // 8188
 	ComfyUILog    string // ~/AI/logs/comfyui.log
 	ComfyUIPID    string // ~/AI/logs/comfyui.pid
+
+	// Web UI (llamactl web serve)
+	WebLabel     string // com.llamastack.llamactl-web
+	WebPlistPath string // ~/Library/LaunchAgents/com.llamastack.llamactl-web.plist
+	WebPort      string // 3333
+	WebLogFile   string // ~/AI/logs/llamactl-web.log
 }
 
 // Load returns a Config populated from environment / defaults.
@@ -32,6 +38,7 @@ func Load() *Config {
 	aiDir := filepath.Join(home, "AI")
 	logDir := filepath.Join(aiDir, "logs")
 	label := "com.llamastack.llama-swap"
+	webLabel := "com.llamastack.llamactl-web"
 	comfyDir := filepath.Join(aiDir, "ComfyUI")
 	return &Config{
 		Label:         label,
@@ -48,5 +55,9 @@ func Load() *Config {
 		ComfyUIPort:   "8188",
 		ComfyUILog:    filepath.Join(logDir, "comfyui.log"),
 		ComfyUIPID:    filepath.Join(logDir, "comfyui.pid"),
+		WebLabel:      webLabel,
+		WebPlistPath:  filepath.Join(home, "Library", "LaunchAgents", webLabel+".plist"),
+		WebPort:       "3333",
+		WebLogFile:    filepath.Join(logDir, "llamactl-web.log"),
 	}
 }
