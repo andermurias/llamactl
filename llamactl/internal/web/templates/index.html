@@ -180,7 +180,7 @@
   </div>
 
   <!-- ── Logs panel ──────────────────────────────────────────────────────── -->
-  <div class="card">
+  <div class="card mb-6">
     <div class="flex items-center justify-between mb-3">
       <h2 class="font-semibold text-white">Logs</h2>
       <div class="flex gap-2">
@@ -194,6 +194,33 @@
       Click a service above to view logs.
     </div>
     <p class="text-gray-600 text-xs mt-2">Auto-refreshes every 5 s when a service is selected.</p>
+  </div>
+
+  <!-- ── Config editor ───────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="font-semibold text-white">Config Editor</h2>
+        <p class="text-gray-500 text-xs mt-0.5">{{.ConfigFile}}</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-gray" onclick="loadConfig()">↺ Load</button>
+        <button class="btn btn-green" id="save-btn" onclick="saveConfig()" disabled>
+          ✓ Save
+        </button>
+      </div>
+    </div>
+    <div id="config-status" class="text-xs mb-2 text-gray-500"></div>
+    <textarea id="config-editor"
+      class="w-full log-box text-gray-200 focus:outline-none resize-y"
+      style="min-height:400px; font-size:0.72rem"
+      spellcheck="false"
+      oninput="document.getElementById('save-btn').disabled=false; setStatus('Unsaved changes', 'yellow')"
+      placeholder="Click ↺ Load to fetch the config…"></textarea>
+    <p class="text-gray-600 text-xs mt-2">
+      llama-swap auto-reloads when the file changes (<code>--watch-config</code> is active).
+      Or run <code>llamactl config reload</code> to force it.
+    </p>
   </div>
 
   <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
@@ -229,6 +256,50 @@
         if (currentSvc) loadLogs(currentSvc);
       });
     });
+
+    // ── Config editor ────────────────────────────────────────────────────
+    function setStatus(msg, color) {
+      const el = document.getElementById('config-status');
+      const colors = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400', gray: 'text-gray-500' };
+      el.className = 'text-xs mb-2 ' + (colors[color] || colors.gray);
+      el.textContent = msg;
+    }
+
+    async function loadConfig() {
+      setStatus('Loading…', 'gray');
+      try {
+        const resp = await fetch('/api/config');
+        const data = await resp.json();
+        if (data.error) { setStatus('Error: ' + data.error, 'red'); return; }
+        document.getElementById('config-editor').value = data.content;
+        document.getElementById('save-btn').disabled = true;
+        setStatus('Loaded from ' + data.path, 'green');
+      } catch(e) {
+        setStatus('Error: ' + e.message, 'red');
+      }
+    }
+
+    async function saveConfig() {
+      const content = document.getElementById('config-editor').value;
+      setStatus('Saving…', 'gray');
+      document.getElementById('save-btn').disabled = true;
+      try {
+        const resp = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content })
+        });
+        const data = await resp.json();
+        if (data.error) { setStatus('Save failed: ' + data.error, 'red'); document.getElementById('save-btn').disabled = false; return; }
+        setStatus('Saved ✓ — llama-swap will reload automatically', 'green');
+      } catch(e) {
+        setStatus('Error: ' + e.message, 'red');
+        document.getElementById('save-btn').disabled = false;
+      }
+    }
+
+    // Auto-load config on page load
+    loadConfig();
   </script>
 </body>
 </html>

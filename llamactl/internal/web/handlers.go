@@ -39,10 +39,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	models := service.GetModelsInfo(s.cfg)
 
 	data := map[string]any{
-		"LlamaSwap": lsStatus,
-		"ComfyUI":   cuStatus,
-		"Models":    models,
-		"ComfyPort": s.cfg.ComfyUIPort,
+		"LlamaSwap":  lsStatus,
+		"ComfyUI":    cuStatus,
+		"Models":     models,
+		"ComfyPort":  s.cfg.ComfyUIPort,
+		"ConfigFile": s.cfg.ConfigFile,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
@@ -172,4 +173,36 @@ func tailFile(path string, n int) ([]string, error) {
 		}
 	}
 	return lines, scanner.Err()
+}
+
+// ── Config ────────────────────────────────────────────────────────────────────
+
+// handleConfig serves GET (read) and POST (write + reload) for llama-swap.yaml.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		data, err := os.ReadFile(s.cfg.ConfigFile)
+		if err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, map[string]string{"content": string(data), "path": s.cfg.ConfigFile})
+
+	case http.MethodPost:
+		var body struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+			return
+		}
+		if err := os.WriteFile(s.cfg.ConfigFile, []byte(body.Content), 0o644); err != nil {
+			jsonErr(w, http.StatusInternalServerError, "write failed: "+err.Error())
+			return
+		}
+		jsonOK(w, map[string]bool{"ok": true})
+
+	default:
+		http.Error(w, "GET or POST only", http.StatusMethodNotAllowed)
+	}
 }

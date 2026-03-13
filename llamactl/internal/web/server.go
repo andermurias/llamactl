@@ -66,7 +66,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/comfyui/start", s.handleComfyUIStart)
 	s.mux.HandleFunc("/api/comfyui/stop", s.handleComfyUIStop)
 
-	// ── API: models + logs ────────────────────────────────────────────────
+	// ── API: models + logs + config ───────────────────────────────────────
 	s.mux.HandleFunc("/api/models", s.handleModels)
 	s.mux.HandleFunc("/api/logs", s.handleLogs)
+	s.mux.HandleFunc("/api/config", s.handleConfig)
 }
