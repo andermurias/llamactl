@@ -2,71 +2,122 @@
 <html lang="en" class="bg-gray-950 text-gray-100">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>llamactl — AI Stack</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
   <style>
+    /* ── Dots & badges ─────────────────────────────────────────────────── */
     .dot-green  { background: #22c55e; }
     .dot-red    { background: #ef4444; }
     .dot-yellow { background: #eab308; }
-    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
-    .btn { cursor: pointer; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem;
-           font-weight: 600; transition: opacity .15s; border: none; }
-    .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn-green  { background: #16a34a; color: #fff; }
-    .btn-red    { background: #b91c1c; color: #fff; }
-    .btn-blue   { background: #2563eb; color: #fff; }
-    .btn-gray   { background: #374151; color: #e5e7eb; }
-    .log-box    { font-family: monospace; font-size: 0.72rem; line-height: 1.5;
-                  background: #0f172a; padding: 12px; border-radius: 8px;
-                  max-height: 340px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-    .card       { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; }
-    .badge      { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
-    .badge-green  { background: #14532d; color: #86efac; }
-    .badge-red    { background: #7f1d1d; color: #fca5a5; }
-    .badge-gray   { background: #1f2937; color: #9ca3af; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+    .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:0.68rem; font-weight:700; white-space:nowrap; }
+    .badge-green { background:#14532d; color:#86efac; }
+    .badge-red   { background:#7f1d1d; color:#fca5a5; }
+    .badge-gray  { background:#1f2937; color:#9ca3af; }
+
+    /* ── Buttons — min 44 px touch target ─────────────────────────────── */
+    .btn {
+      cursor:pointer; padding:10px 16px; border-radius:8px; font-size:0.8rem;
+      font-weight:600; transition:opacity .15s, background .15s; border:none;
+      min-height:40px; display:inline-flex; align-items:center; gap:4px;
+      white-space:nowrap; touch-action:manipulation;
+    }
+    .btn:disabled    { opacity:.4; cursor:not-allowed; }
+    .btn:active:not(:disabled) { opacity:.75; }
+    .btn-green { background:#16a34a; color:#fff; }
+    .btn-red   { background:#b91c1c; color:#fff; }
+    .btn-blue  { background:#2563eb; color:#fff; }
+    .btn-gray  { background:#374151; color:#e5e7eb; }
+
+    /* ── Cards ─────────────────────────────────────────────────────────── */
+    .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px; }
+    @media (min-width:640px) { .card { padding:20px; } }
+
+    /* ── Monospace boxes ────────────────────────────────────────────────── */
+    .mono-box {
+      font-family:ui-monospace, 'Cascadia Code', monospace;
+      font-size:0.7rem; line-height:1.5;
+      background:#0f172a; padding:12px; border-radius:8px;
+      overflow-y:auto; white-space:pre-wrap; word-break:break-all;
+      -webkit-overflow-scrolling:touch;
+    }
+
+    /* ── Bottom nav (mobile) ────────────────────────────────────────────── */
+    .bottom-nav {
+      position:fixed; bottom:0; left:0; right:0;
+      background:#111827; border-top:1px solid #1f2937;
+      display:flex;
+      padding-bottom:env(safe-area-inset-bottom, 0px);
+      z-index:50;
+    }
+    .nav-tab {
+      flex:1; display:flex; flex-direction:column; align-items:center;
+      justify-content:center; padding:10px 4px 8px;
+      font-size:0.65rem; color:#6b7280; cursor:pointer;
+      transition:color .15s; border:none; background:transparent;
+      touch-action:manipulation; gap:3px;
+    }
+    .nav-tab.active { color:#60a5fa; }
+    .nav-tab svg { width:20px; height:20px; }
+
+    /* ── Section visibility ─────────────────────────────────────────────── */
+    .section { display:none; }
+    .section.active { display:block; }
+    @media (min-width:640px) {
+      .section { display:block !important; }
+      .bottom-nav { display:none; }
+    }
+
+    /* Desktop: all sections visible, no bottom nav offset */
+    @media (min-width:640px) {
+      body { padding-bottom: 0 !important; }
+    }
+
+    /* DL grid */
+    dl.info { display:grid; grid-template-columns:auto 1fr; gap:4px 16px; }
+    dl.info dt { color:#9ca3af; font-size:0.82rem; white-space:nowrap; }
+    dl.info dd { color:#e5e7eb; font-size:0.82rem; }
   </style>
 </head>
-<body class="min-h-screen p-6">
+<body class="min-h-screen" style="padding:12px 12px 80px; padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))">
 
   <!-- ── Header ──────────────────────────────────────────────────────────── -->
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex items-center justify-between mb-4">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-white">🦙 llamactl</h1>
-      <p class="text-gray-400 text-sm mt-0.5">Local AI Stack Manager</p>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white leading-tight">🦙 llamactl</h1>
+      <p class="text-gray-400 text-xs sm:text-sm">Local AI Stack</p>
     </div>
-    <button class="btn btn-gray"
-            hx-get="/"
-            hx-target="body"
-            hx-swap="outerHTML"
-            title="Refresh">
+    <button class="btn btn-gray text-xs"
+            hx-get="/" hx-target="body" hx-swap="outerHTML" title="Refresh">
       ↻ Refresh
     </button>
   </div>
 
-  <!-- ── Status cards ────────────────────────────────────────────────────── -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SECTION: Services
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="sec-services" class="section active">
 
     <!-- llama-swap card -->
-    <div class="card">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          {{if .LlamaSwap.IsRunning}}
-            <span class="dot dot-green"></span>
-            <span class="font-semibold text-white">llama-swap</span>
-            <span class="badge badge-green">running</span>
-          {{else if .LlamaSwap.IsInstalled}}
-            <span class="dot dot-yellow"></span>
-            <span class="font-semibold text-white">llama-swap</span>
-            <span class="badge badge-red">stopped</span>
-          {{else}}
-            <span class="dot dot-red"></span>
-            <span class="font-semibold text-white">llama-swap</span>
-            <span class="badge badge-gray">not installed</span>
-          {{end}}
-        </div>
-        <div class="flex gap-2">
+    <div class="card mb-3">
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        {{if .LlamaSwap.IsRunning}}
+          <span class="dot dot-green"></span>
+          <span class="font-semibold text-white">llama-swap</span>
+          <span class="badge badge-green">running</span>
+        {{else if .LlamaSwap.IsInstalled}}
+          <span class="dot dot-yellow"></span>
+          <span class="font-semibold text-white">llama-swap</span>
+          <span class="badge badge-red">stopped</span>
+        {{else}}
+          <span class="dot dot-red"></span>
+          <span class="font-semibold text-white">llama-swap</span>
+          <span class="badge badge-gray">not installed</span>
+        {{end}}
+        <div class="flex gap-2 ml-auto flex-wrap">
           {{if .LlamaSwap.IsRunning}}
             <button class="btn btn-blue"
                     hx-post="/api/llamaswap/restart"
@@ -87,34 +138,32 @@
           {{end}}
         </div>
       </div>
-      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
+      <dl class="info">
         {{if .LlamaSwap.IsRunning}}
-          <dt>PID</dt>       <dd class="text-gray-200">{{.LlamaSwap.PID}}</dd>
-          <dt>Uptime</dt>    <dd class="text-gray-200">{{.LlamaSwap.Uptime}}</dd>
+          <dt>PID</dt>    <dd>{{.LlamaSwap.PID}}</dd>
+          <dt>Uptime</dt> <dd>{{.LlamaSwap.Uptime}}</dd>
         {{end}}
-        <dt>API</dt>       <dd class="text-gray-200">{{.LlamaSwap.APIAddr}}</dd>
-        <dt>Auto-start</dt><dd class="text-gray-200">{{if .LlamaSwap.AutoStart}}✓ enabled{{else}}disabled{{end}}</dd>
+        <dt>API</dt>        <dd class="font-mono text-xs break-all">{{.LlamaSwap.APIAddr}}</dd>
+        <dt>Auto-start</dt> <dd>{{if .LlamaSwap.AutoStart}}✓ enabled{{else}}disabled{{end}}</dd>
         {{if .LlamaSwap.APIReachable}}
-          <dt>Loaded</dt>   <dd class="text-gray-200">{{len .LlamaSwap.LoadedModels}} model(s) in memory</dd>
+          <dt>In memory</dt> <dd>{{len .LlamaSwap.LoadedModels}} model(s)</dd>
         {{end}}
       </dl>
     </div>
 
     <!-- ComfyUI card -->
-    <div class="card">
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2">
-          {{if .ComfyUI.IsRunning}}
-            <span class="dot dot-green"></span>
-            <span class="font-semibold text-white">ComfyUI</span>
-            <span class="badge badge-green">running</span>
-          {{else}}
-            <span class="dot dot-red"></span>
-            <span class="font-semibold text-white">ComfyUI</span>
-            <span class="badge badge-red">stopped</span>
-          {{end}}
-        </div>
-        <div class="flex gap-2">
+    <div class="card mb-3">
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        {{if .ComfyUI.IsRunning}}
+          <span class="dot dot-green"></span>
+          <span class="font-semibold text-white">ComfyUI</span>
+          <span class="badge badge-green">running</span>
+        {{else}}
+          <span class="dot dot-red"></span>
+          <span class="font-semibold text-white">ComfyUI</span>
+          <span class="badge badge-red">stopped</span>
+        {{end}}
+        <div class="flex gap-2 ml-auto flex-wrap">
           {{if .ComfyUI.IsRunning}}
             <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-blue">↗ Open</a>
             <button class="btn btn-red"
@@ -131,136 +180,231 @@
           {{end}}
         </div>
       </div>
-      <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-400 mt-2">
+      <dl class="info">
         {{if .ComfyUI.IsRunning}}
-          <dt>PID</dt>    <dd class="text-gray-200">{{.ComfyUI.PID}}</dd>
-          <dt>Uptime</dt> <dd class="text-gray-200">{{.ComfyUI.Uptime}}</dd>
-          <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" class="text-blue-400 underline">{{.ComfyUI.URL}}</a></dd>
+          <dt>PID</dt>    <dd>{{.ComfyUI.PID}}</dd>
+          <dt>Uptime</dt> <dd>{{.ComfyUI.Uptime}}</dd>
+          <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" class="text-blue-400 underline text-xs break-all">{{.ComfyUI.URL}}</a></dd>
         {{else}}
-          <dt>Port</dt>   <dd class="text-gray-200">{{.ComfyPort}}</dd>
-          <dt>Note</dt>   <dd class="text-gray-500">starts on demand</dd>
+          <dt>Port</dt> <dd>{{.ComfyPort}}</dd>
+          <dt>Note</dt> <dd class="text-gray-500">starts on demand</dd>
         {{end}}
       </dl>
     </div>
-  </div>
 
-  <!-- ── Models table ────────────────────────────────────────────────────── -->
-  <div class="card mb-6">
-    <h2 class="font-semibold text-white mb-3">Models
-      <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
-    </h2>
-    {{if .Models.APIReachable}}
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-gray-500 border-b border-gray-800">
-              <th class="text-left pb-2 pr-4">Model ID</th>
-              <th class="text-left pb-2">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .Models.APIModels}}
-            <tr class="border-b border-gray-900 hover:bg-gray-800/30">
-              <td class="py-2 pr-4 text-gray-200 font-mono text-xs">{{.ID}}</td>
-              <td class="py-2">
-                {{if index $.Models.LoadedIDs .ID}}
-                  <span class="badge badge-green">● loaded</span>
-                {{else}}
-                  <span class="badge badge-gray">unloaded</span>
-                {{end}}
-              </td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
-      </div>
-    {{else}}
-      <p class="text-gray-500 text-sm">llama-swap is not reachable — start it to see models.</p>
-    {{end}}
-  </div>
+    <!-- Models summary (desktop only inline; mobile users tap Models tab) -->
+    <div class="card hidden sm:block">
+      <h2 class="font-semibold text-white mb-3">
+        Models <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
+      </h2>
+      {{if .Models.APIReachable}}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-gray-500 border-b border-gray-800">
+                <th class="text-left pb-2 pr-4">Model ID</th>
+                <th class="text-left pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Models.APIModels}}
+              <tr class="border-b border-gray-900 hover:bg-gray-800/30">
+                <td class="py-2 pr-4 text-gray-200 font-mono text-xs break-all">{{.ID}}</td>
+                <td class="py-2">
+                  {{if index $.Models.LoadedIDs .ID}}
+                    <span class="badge badge-green">● loaded</span>
+                  {{else}}
+                    <span class="badge badge-gray">unloaded</span>
+                  {{end}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      {{else}}
+        <p class="text-gray-500 text-sm">llama-swap is not reachable — start it to see models.</p>
+      {{end}}
+    </div>
 
-  <!-- ── Logs panel ──────────────────────────────────────────────────────── -->
-  <div class="card mb-6">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="font-semibold text-white">Logs</h2>
-      <div class="flex gap-2">
-        <button class="btn btn-gray" id="log-ls-btn"
-                onclick="loadLogs('llamaswap')">llama-swap</button>
-        <button class="btn btn-gray" id="log-cu-btn"
-                onclick="loadLogs('comfyui')">ComfyUI</button>
-      </div>
-    </div>
-    <div id="log-container" class="log-box text-gray-400">
-      Click a service above to view logs.
-    </div>
-    <p class="text-gray-600 text-xs mt-2">Auto-refreshes every 5 s when a service is selected.</p>
-  </div>
+  </div><!-- /sec-services -->
 
-  <!-- ── Config editor ───────────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="flex items-center justify-between mb-3">
-      <div>
-        <h2 class="font-semibold text-white">Config Editor</h2>
-        <p class="text-gray-500 text-xs mt-0.5">{{.ConfigFile}}</p>
-      </div>
-      <div class="flex gap-2">
-        <button class="btn btn-gray" onclick="loadConfig()">↺ Load</button>
-        <button class="btn btn-green" id="save-btn" onclick="saveConfig()" disabled>
-          ✓ Save
-        </button>
-      </div>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SECTION: Models (mobile)
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="sec-models" class="section">
+    <div class="card">
+      <h2 class="font-semibold text-white mb-3">
+        Models <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
+      </h2>
+      {{if .Models.APIReachable}}
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-gray-500 border-b border-gray-800">
+                <th class="text-left pb-2 pr-4 pl-1">Model ID</th>
+                <th class="text-left pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Models.APIModels}}
+              <tr class="border-b border-gray-900">
+                <td class="py-2 pr-4 pl-1 text-gray-200 font-mono text-xs break-all">{{.ID}}</td>
+                <td class="py-2">
+                  {{if index $.Models.LoadedIDs .ID}}
+                    <span class="badge badge-green">● loaded</span>
+                  {{else}}
+                    <span class="badge badge-gray">unloaded</span>
+                  {{end}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      {{else}}
+        <p class="text-gray-500 text-sm">llama-swap is not running.</p>
+      {{end}}
     </div>
-    <div id="config-status" class="text-xs mb-2 text-gray-500"></div>
-    <textarea id="config-editor"
-      class="w-full log-box text-gray-200 focus:outline-none resize-y"
-      style="min-height:400px; font-size:0.72rem"
-      spellcheck="false"
-      oninput="document.getElementById('save-btn').disabled=false; setStatus('Unsaved changes', 'yellow')"
-      placeholder="Click ↺ Load to fetch the config…"></textarea>
-    <p class="text-gray-600 text-xs mt-2">
-      llama-swap auto-reloads when the file changes (<code>--watch-config</code> is active).
-      Or run <code>llamactl config reload</code> to force it.
-    </p>
-  </div>
+  </div><!-- /sec-models -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SECTION: Logs
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="sec-logs" class="section">
+    <div class="card">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="font-semibold text-white">Logs</h2>
+        <div class="flex gap-2">
+          <button class="btn btn-gray" onclick="loadLogs('llamaswap')">llama-swap</button>
+          <button class="btn btn-gray" onclick="loadLogs('comfyui')">ComfyUI</button>
+        </div>
+      </div>
+      <div id="log-container" class="mono-box text-gray-400" style="max-height:60vh">
+        Tap a service above to view logs.
+      </div>
+      <p class="text-gray-600 text-xs mt-2">Auto-refreshes every 5 s.</p>
+    </div>
+  </div><!-- /sec-logs -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SECTION: Config
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div id="sec-config" class="section">
+    <div class="card">
+      <div class="flex items-start justify-between mb-3 gap-3">
+        <div class="min-w-0">
+          <h2 class="font-semibold text-white">Config Editor</h2>
+          <p class="text-gray-500 text-xs mt-0.5 break-all">{{.ConfigFile}}</p>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button class="btn btn-gray" onclick="loadConfig()">↺</button>
+          <button class="btn btn-green" id="save-btn" onclick="saveConfig()" disabled>✓ Save</button>
+        </div>
+      </div>
+      <div id="config-status" class="text-xs mb-2 text-gray-500 min-h-[1rem]"></div>
+      <textarea id="config-editor"
+        class="w-full mono-box text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+        style="min-height:55vh"
+        spellcheck="false"
+        autocorrect="off" autocapitalize="off"
+        oninput="document.getElementById('save-btn').disabled=false; setStatus('Unsaved changes', 'yellow')"
+        placeholder="Tap ↺ to load…"></textarea>
+      <p class="text-gray-600 text-xs mt-2">
+        llama-swap auto-reloads on save (<code>--watch-config</code>).
+      </p>
+    </div>
+  </div><!-- /sec-config -->
+
+  <!-- ── Bottom navigation (mobile only) ─────────────────────────────────── -->
+  <nav class="bottom-nav sm:hidden" role="navigation" aria-label="Main">
+    <button class="nav-tab active" id="tab-services" onclick="showSection('services')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+      </svg>
+      Services
+    </button>
+    <button class="nav-tab" id="tab-models" onclick="showSection('models')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      </svg>
+      Models
+    </button>
+    <button class="nav-tab" id="tab-logs" onclick="showSection('logs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+      </svg>
+      Logs
+    </button>
+    <button class="nav-tab" id="tab-config" onclick="showSection('config')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+      </svg>
+      Config
+    </button>
+  </nav>
 
   <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
   <script>
+    // ── Section / tab navigation (mobile) ────────────────────────────────
+    const SECTIONS = ['services', 'models', 'logs', 'config'];
+    let activeSection = 'services';
+
+    function showSection(name) {
+      SECTIONS.forEach(s => {
+        document.getElementById('sec-' + s).classList.toggle('active', s === name);
+        const tab = document.getElementById('tab-' + s);
+        if (tab) tab.classList.toggle('active', s === name);
+      });
+      activeSection = name;
+      // Start log auto-refresh when switching to logs
+      if (name === 'logs' && currentSvc) startLogPolling(currentSvc);
+      if (name !== 'logs' && logInterval) { clearInterval(logInterval); logInterval = null; }
+    }
+
+    // ── Logs ─────────────────────────────────────────────────────────────
     let currentSvc = null;
     let logInterval = null;
 
-    async function loadLogs(svc) {
-      currentSvc = svc;
-      if (logInterval) clearInterval(logInterval);
-
-      const render = async () => {
-        const resp = await fetch(`/api/logs?service=${svc}&lines=150`);
-        const data = await resp.json();
-        const box = document.getElementById('log-container');
-        if (data.lines && data.lines.length) {
-          box.textContent = data.lines.join('\n');
-          box.scrollTop = box.scrollHeight;
-        } else if (data.error) {
-          box.textContent = 'Error: ' + data.error;
-        } else {
-          box.textContent = '(no log entries)';
-        }
-      };
-
-      await render();
-      logInterval = setInterval(render, 5000);
+    async function renderLogs(svc) {
+      const resp = await fetch(`/api/logs?service=${svc}&lines=150`);
+      const data = await resp.json();
+      const box = document.getElementById('log-container');
+      const atBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 30;
+      if (data.lines && data.lines.length) {
+        box.textContent = data.lines.join('\n');
+      } else if (data.error) {
+        box.textContent = 'Error: ' + data.error;
+      } else {
+        box.textContent = '(no log entries)';
+      }
+      if (atBottom) box.scrollTop = box.scrollHeight;
     }
 
-    // Page refresh via HTMX event
+    function startLogPolling(svc) {
+      if (logInterval) clearInterval(logInterval);
+      renderLogs(svc);
+      logInterval = setInterval(() => renderLogs(svc), 5000);
+    }
+
+    function loadLogs(svc) {
+      currentSvc = svc;
+      startLogPolling(svc);
+    }
+
+    // ── Page refresh via HTMX event ────────────────────────────────────
     document.body.addEventListener('refresh', () => {
       htmx.ajax('GET', '/', {target: 'body', swap: 'outerHTML'}).then(() => {
-        if (currentSvc) loadLogs(currentSvc);
+        showSection(activeSection);
+        if (currentSvc) startLogPolling(currentSvc);
       });
     });
 
-    // ── Config editor ────────────────────────────────────────────────────
+    // ── Config editor ─────────────────────────────────────────────────
     function setStatus(msg, color) {
       const el = document.getElementById('config-status');
-      const colors = { green: 'text-green-400', yellow: 'text-yellow-400', red: 'text-red-400', gray: 'text-gray-500' };
+      const colors = { green:'text-green-400', yellow:'text-yellow-400', red:'text-red-400', gray:'text-gray-500' };
       el.className = 'text-xs mb-2 ' + (colors[color] || colors.gray);
       el.textContent = msg;
     }
@@ -273,10 +417,8 @@
         if (data.error) { setStatus('Error: ' + data.error, 'red'); return; }
         document.getElementById('config-editor').value = data.content;
         document.getElementById('save-btn').disabled = true;
-        setStatus('Loaded from ' + data.path, 'green');
-      } catch(e) {
-        setStatus('Error: ' + e.message, 'red');
-      }
+        setStatus('Loaded ✓', 'green');
+      } catch(e) { setStatus('Error: ' + e.message, 'red'); }
     }
 
     async function saveConfig() {
@@ -290,8 +432,12 @@
           body: JSON.stringify({ content })
         });
         const data = await resp.json();
-        if (data.error) { setStatus('Save failed: ' + data.error, 'red'); document.getElementById('save-btn').disabled = false; return; }
-        setStatus('Saved ✓ — llama-swap will reload automatically', 'green');
+        if (data.error) {
+          setStatus('Save failed: ' + data.error, 'red');
+          document.getElementById('save-btn').disabled = false;
+          return;
+        }
+        setStatus('Saved ✓ — llama-swap reloading…', 'green');
       } catch(e) {
         setStatus('Error: ' + e.message, 'red');
         document.getElementById('save-btn').disabled = false;
