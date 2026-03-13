@@ -41,7 +41,7 @@ func Load() *Config {
 		LlamaSwapBin:  "/opt/homebrew/bin/llama-swap",
 		LogDir:        logDir,
 		LogFile:       filepath.Join(logDir, "llama-swap.log"),
-		Listen:        "127.0.0.1:8080",
+		Listen:        "0.0.0.0:8080",
 		UserID:        os.Getuid(),
 		ComfyUIDir:    comfyDir,
 		ComfyUIPython: filepath.Join(comfyDir, ".venv", "bin", "python"),
