@@ -4,358 +4,418 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>llamactl</title>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
   <style>
+    /* ── Design tokens ──────────────────────────────────────────────────── */
     :root {
-      --bg:       #09090b;
-      --surface:  #18181b;
-      --border:   #27272a;
-      --muted:    #3f3f46;
-      --text:     #fafafa;
-      --text-dim: #a1a1aa;
-      --green:    #22c55e;
-      --red:      #ef4444;
-      --yellow:   #eab308;
-      --blue:     #3b82f6;
-      --inset:    #0c0c0e;
+      --bg:        #0f0f10;
+      --surface:   #1c1c1e;
+      --surface2:  #252528;
+      --border:    #2c2c2e;
+      --border2:   #3a3a3c;
+      --text:      #f5f5f7;
+      --text-2:    #98989f;
+      --text-3:    #636366;
+      --green:     #30d158;
+      --green-bg:  rgba(48,209,88,.12);
+      --red:       #ff453a;
+      --red-bg:    rgba(255,69,58,.12);
+      --yellow:    #ffd60a;
+      --yellow-bg: rgba(255,214,10,.12);
+      --blue:      #0a84ff;
+      --blue-bg:   rgba(10,132,255,.12);
+      --sidebar-w: 240px;
+      --header-h:  52px;
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, sans-serif; }
 
-    /* ── Layout shell ─────────────────────────────────────────────────── */
-    body { min-height: 100dvh; display: flex; flex-direction: column; margin: 0; }
+    /* ── Reset & base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+    /* ── Layout ─────────────────────────────────────────────────────────── */
+    .layout { display: flex; min-height: 100dvh; }
+
+    /* ── Sidebar ────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0;
+      height: 100dvh;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform .22s cubic-bezier(.4,0,.2,1);
+      overflow-y: auto;
+    }
+    .sidebar.open { transform: translateX(0); }
+    @media (min-width: 768px) {
+      .sidebar { transform: translateX(0); position: sticky; top: 0; height: 100dvh; }
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.65);
+      z-index: 40;
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+    }
+    .sidebar-overlay.open { display: block; }
+    @media (min-width: 768px) { .sidebar-overlay { display: none !important; } }
+
+    .sidebar-header { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); }
+    .sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .sidebar-icon {
+      width: 32px; height: 32px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 17px; flex-shrink: 0;
+    }
+    .sidebar-name { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+    .sidebar-sub  { font-size: 11px; color: var(--text-3); }
+
+    .svc-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; margin-bottom: 5px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 12px;
+    }
+    .svc-pill:last-child { margin-bottom: 0; }
+    .svc-name { color: var(--text); font-weight: 500; flex: 1; }
+    .svc-meta { color: var(--text-3); font-size: 11px; }
+
+    .sidebar-nav { padding: 10px 8px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 7px;
+      font-size: 13.5px; color: var(--text-2);
+      background: none; border: none; width: 100%; text-align: left;
+      transition: background .1s, color .1s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      margin-bottom: 1px;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--surface2); color: var(--text); font-weight: 600; }
+    .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: .6; }
+    .nav-item.active svg { opacity: 1; }
+    .nav-count {
+      margin-left: auto;
+      font-size: 10.5px; font-weight: 600; color: var(--text-3);
+      background: var(--border); border-radius: 99px;
+      padding: 1px 7px;
+    }
+
+    .sidebar-footer { padding: 8px 8px 14px; border-top: 1px solid var(--border); }
+
+    /* ── Main ───────────────────────────────────────────────────────────── */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    @media (min-width: 768px) { .main { margin-left: var(--sidebar-w); } }
 
     .topbar {
-      height: 56px; flex-shrink: 0;
-      background: var(--surface); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 16px; position: sticky; top: 0; z-index: 40;
+      height: var(--header-h); padding: 0 16px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 30;
     }
-    .topbar-brand { display: flex; align-items: center; gap: 10px; }
-    .topbar-brand h1 { font-size: 1rem; font-weight: 700; letter-spacing: -.02em; }
-    .topbar-brand span { font-size: .75rem; color: var(--text-dim); display: none; }
-    @media(min-width:640px){ .topbar-brand span { display: block; } }
+    @media (min-width: 768px) { .topbar { display: none; } }
 
-    /* ── Desktop: sidebar + content ──────────────────────────────────── */
-    .app-body { display: flex; flex: 1; overflow: hidden; }
-
-    .sidebar {
-      display: none;
-      width: 220px; flex-shrink: 0;
-      background: var(--surface); border-right: 1px solid var(--border);
-      position: sticky; top: 56px; height: calc(100dvh - 56px);
-      overflow-y: auto; padding: 20px 12px;
-      flex-direction: column; gap: 8px;
+    .topbar-brand { font-size: 15px; font-weight: 700; letter-spacing: -.02em; }
+    .hamburger {
+      background: none; border: none; padding: 6px; color: var(--text-2);
+      border-radius: 6px; display: flex; align-items: center;
+      -webkit-tap-highlight-color: transparent;
     }
-    @media(min-width:1024px){ .sidebar { display: flex; } }
+    .hamburger:hover { background: var(--surface2); }
 
-    .sidebar-label {
-      font-size: .65rem; font-weight: 600; letter-spacing: .08em;
-      color: var(--text-dim); text-transform: uppercase;
-      padding: 4px 8px; margin-top: 8px;
+    .page {
+      flex: 1; padding: 28px 24px;
+      max-width: 860px; width: 100%;
     }
-    .sidebar-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 10px; border-radius: 8px; cursor: pointer;
-      font-size: .875rem; color: var(--text-dim); border: none; background: none;
-      width: 100%; text-align: left; transition: background .12s, color .12s;
-      text-decoration: none;
-    }
-    .sidebar-item:hover { background: var(--muted); color: var(--text); }
-    .sidebar-item.active { background: #1d4ed8; color: #fff; }
-    .sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    @media (max-width: 767px) { .page { padding: 20px 16px 80px; } }
 
-    .sidebar-svc {
-      background: var(--inset); border: 1px solid var(--border); border-radius: 10px;
-      padding: 10px 12px; margin-bottom: 4px;
-    }
-    .sidebar-svc-name { font-size: .8rem; font-weight: 600; display: flex; align-items: center; gap: 7px; }
-    .sidebar-svc-meta { font-size: .7rem; color: var(--text-dim); margin-top: 2px; }
-
-    /* ── Main content area ───────────────────────────────────────────── */
-    .main-content {
-      flex: 1; overflow-y: auto;
-      padding: 0 0 calc(72px + env(safe-area-inset-bottom,0px));
-    }
-    @media(min-width:640px){ .main-content { padding-bottom: 24px; } }
-
-    .content-inner {
-      max-width: 900px; margin: 0 auto; padding: 20px 14px;
-    }
-    @media(min-width:640px){ .content-inner { padding: 24px 20px; } }
-
-    /* ── Tab nav (tablet/desktop horizontal) ────────────────────────── */
-    .tab-nav {
-      display: none; gap: 2px;
-      border-bottom: 1px solid var(--border);
-      padding: 0 20px;
-      background: var(--surface);
-      position: sticky; top: 56px; z-index: 30;
-    }
-    @media(min-width:640px) and (max-width:1023px){ .tab-nav { display: flex; } }
-
-    .tab-btn {
-      display: flex; align-items: center; gap: 7px;
-      padding: 12px 14px; font-size: .82rem; font-weight: 500;
-      color: var(--text-dim); border: none; background: none; cursor: pointer;
-      border-bottom: 2px solid transparent; margin-bottom: -1px;
-      transition: color .15s, border-color .15s; white-space: nowrap;
-    }
-    .tab-btn:hover { color: var(--text); }
-    .tab-btn.active { color: var(--text); border-bottom-color: var(--blue); }
-    .tab-btn svg { width: 15px; height: 15px; }
-
-    /* ── Bottom nav (mobile) ─────────────────────────────────────────── */
-    .bottom-nav {
-      position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
-      background: var(--surface); border-top: 1px solid var(--border);
-      display: flex;
-      padding-bottom: env(safe-area-inset-bottom, 0px);
-    }
-    @media(min-width:640px){ .bottom-nav { display: none; } }
-
-    .bnav-btn {
-      flex: 1; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; padding: 10px 4px 8px; gap: 3px;
-      font-size: .62rem; color: var(--text-dim); border: none; background: none;
-      cursor: pointer; touch-action: manipulation; transition: color .15s;
-    }
-    .bnav-btn.active { color: var(--blue); }
-    .bnav-btn svg { width: 21px; height: 21px; }
-
-    /* ── Section visibility ──────────────────────────────────────────── */
+    /* ── Sections ───────────────────────────────────────────────────────── */
     .section { display: none; }
-    .section.active { display: block; }
-    @media(min-width:1024px){ .section { display: block !important; } }
+    .section.active { display: block; animation: fadeIn .16s ease; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(5px); } to { opacity:1; transform: none; } }
 
-    /* ── Cards ───────────────────────────────────────────────────────── */
+    .section-title { font-size: 17px; font-weight: 700; letter-spacing: -.03em; margin-bottom: 3px; }
+    .section-sub   { font-size: 12px; color: var(--text-3); margin-bottom: 20px; }
+
+    /* ── Cards ──────────────────────────────────────────────────────────── */
     .card {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 12px; padding: 16px; margin-bottom: 12px;
+      border-radius: 12px; padding: 18px; margin-bottom: 10px;
     }
-    @media(min-width:640px){ .card { padding: 20px; margin-bottom: 16px; } }
-    .card-title { font-size: .875rem; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .card-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .card-title { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 0; }
+    .card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 
-    /* ── Service status header ───────────────────────────────────────── */
-    .svc-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-    .svc-name { font-size: .875rem; font-weight: 700; }
-    .svc-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+    /* ── Stat grid ──────────────────────────────────────────────────────── */
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+      gap: 8px; margin-bottom: 16px;
+    }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .stat-label { font-size: 10.5px; color: var(--text-3); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+    .stat-value { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
 
-    /* ── Stat row ────────────────────────────────────────────────────── */
-    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 8px; margin-bottom: 14px; }
-    .stat { background: var(--inset); border-radius: 8px; padding: 10px 12px; }
-    .stat-label { font-size: .65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; }
-    .stat-value { font-size: .95rem; font-weight: 600; margin-top: 2px; }
+    /* ── Status dot ─────────────────────────────────────────────────────── */
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+    .dot-green  { background: var(--green);  box-shadow: 0 0 0 3px var(--green-bg); }
+    .dot-red    { background: var(--red);    box-shadow: 0 0 0 3px var(--red-bg); }
+    .dot-yellow { background: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-bg); }
+    .dot-gray   { background: var(--text-3); }
 
-    /* ── Info list ───────────────────────────────────────────────────── */
-    .info-list { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; }
-    .info-list dt { font-size: .78rem; color: var(--text-dim); white-space: nowrap; padding: 2px 0; }
-    .info-list dd { font-size: .78rem; padding: 2px 0; }
+    /* ── Badge ──────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-green  { background: var(--green-bg);  color: var(--green);  }
+    .badge-red    { background: var(--red-bg);    color: var(--red);    }
+    .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+    .badge-gray   { background: var(--surface2);  color: var(--text-3); border: 1px solid var(--border); }
 
-    /* ── Badges ──────────────────────────────────────────────────────── */
-    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: .67rem; font-weight: 700; white-space: nowrap; }
-    .badge-green { background: #14532d; color: #86efac; }
-    .badge-red   { background: #7f1d1d; color: #fca5a5; }
-    .badge-yellow{ background: #713f12; color: #fde68a; }
-    .badge-gray  { background: var(--muted); color: #d4d4d8; }
-
-    /* ── Status dot ──────────────────────────────────────────────────── */
-    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-    .dot-green  { background: var(--green); box-shadow: 0 0 6px #22c55e88; }
-    .dot-red    { background: var(--red); }
-    .dot-yellow { background: var(--yellow); }
-
-    /* ── Buttons ─────────────────────────────────────────────────────── */
+    /* ── Buttons ────────────────────────────────────────────────────────── */
     .btn {
-      cursor: pointer; padding: 8px 14px; border-radius: 7px; font-size: .78rem;
-      font-weight: 600; border: none; transition: opacity .15s, filter .12s;
       display: inline-flex; align-items: center; gap: 5px;
-      white-space: nowrap; touch-action: manipulation; min-height: 36px;
-      text-decoration: none;
+      padding: 6px 13px; border-radius: 7px;
+      font-size: 12.5px; font-weight: 500; border: none; cursor: pointer;
+      white-space: nowrap; transition: opacity .12s, filter .1s;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      min-height: 32px; text-decoration: none;
     }
-    .btn:disabled { opacity: .4; cursor: not-allowed; }
-    .btn:active:not(:disabled) { filter: brightness(.85); }
-    .btn-primary { background: #1d4ed8; color: #fff; }
-    .btn-danger  { background: #991b1b; color: #fff; }
-    .btn-warn    { background: #1d4ed8; color: #fff; }
-    .btn-ghost   { background: var(--muted); color: var(--text); }
-    .btn-success { background: #15803d; color: #fff; }
-    .btn-sm { padding: 6px 11px; font-size: .72rem; min-height: 30px; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
+    .btn:active:not(:disabled) { filter: brightness(.82); }
+    .btn svg { width: 13px; height: 13px; }
 
-    /* ── Mono boxes ──────────────────────────────────────────────────── */
-    .mono {
-      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
-      font-size: .7rem; line-height: 1.6;
-      background: var(--inset); padding: 12px; border-radius: 8px;
-      overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+    .btn-default { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+    .btn-default:hover { background: var(--border); }
+    .btn-primary { background: var(--text); color: var(--bg); }
+    .btn-primary:hover { opacity: .88; }
+    .btn-danger  { background: var(--red-bg);   color: var(--red);   border: 1px solid rgba(255,69,58,.2); }
+    .btn-danger:hover  { background: rgba(255,69,58,.2); }
+    .btn-success { background: var(--green-bg); color: var(--green); border: 1px solid rgba(48,209,88,.2); }
+    .btn-success:hover { background: rgba(48,209,88,.2); }
+    .btn-sm { padding: 5px 10px; font-size: 11.5px; min-height: 28px; }
+
+    /* ── Info list ──────────────────────────────────────────────────────── */
+    .info-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 18px; }
+    .info-dl dt { color: var(--text-3); font-size: 12px; white-space: nowrap; padding: 2px 0; }
+    .info-dl dd { font-size: 12px; color: var(--text-2); padding: 2px 0; }
+    code { font-family: ui-monospace,'Cascadia Code',monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+    hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+    /* ── Table ──────────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { text-align: left; padding: 8px 16px; font-size: 10.5px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .07em; border-bottom: 1px solid var(--border); }
+    tbody td { padding: 10px 16px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: rgba(255,255,255,.018); }
+    .mono-text { font-family: ui-monospace,'Cascadia Code',monospace; font-size: 11px; color: var(--text-2); word-break: break-all; }
+
+    /* ── Log box ────────────────────────────────────────────────────────── */
+    .log-box {
+      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-size: 11.5px; line-height: 1.65;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; overflow-y: auto; max-height: 58vh;
+      white-space: pre-wrap; word-break: break-all; color: var(--text-2);
       -webkit-overflow-scrolling: touch;
     }
 
-    /* ── Table ───────────────────────────────────────────────────────── */
-    .data-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-    .data-table th { text-align: left; padding: 8px 12px; font-size: .68rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); }
-    .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--inset); }
-    .data-table tr:last-child td { border-bottom: none; }
-    .data-table tr:hover td { background: rgba(255,255,255,.025); }
-
-    /* ── Divider ─────────────────────────────────────────────────────── */
-    .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
-
-    /* ── Textarea ────────────────────────────────────────────────────── */
-    textarea.code-editor {
-      width: 100%; background: var(--inset); color: #d4d4d8;
-      font-family: ui-monospace, 'Cascadia Code', monospace;
-      font-size: .72rem; line-height: 1.65;
-      border: 1px solid var(--border); border-radius: 8px; padding: 12px;
-      resize: none; outline: none; min-height: 55vh;
-      -webkit-overflow-scrolling: touch;
-      autocorrect: off; autocapitalize: off;
+    /* ── Log tabs ───────────────────────────────────────────────────────── */
+    .log-tabs { display: flex; gap: 4px; margin-bottom: 10px; align-items: center; }
+    .log-tab {
+      padding: 5px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 500;
+      background: none; border: 1px solid var(--border); color: var(--text-3);
+      cursor: pointer; transition: all .1s;
+      -webkit-tap-highlight-color: transparent;
     }
-    textarea.code-editor:focus { border-color: var(--blue); box-shadow: 0 0 0 2px #3b82f620; }
+    .log-tab:hover { border-color: var(--border2); color: var(--text-2); }
+    .log-tab.active { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+    .live-indicator {
+      display: none; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--text-3); margin-left: auto;
+    }
+    .live-indicator.on { display: flex; }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+      animation: livepulse 1.8s ease-in-out infinite;
+    }
+    @keyframes livepulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.35; transform:scale(.7); } }
 
-    /* ── Animations ──────────────────────────────────────────────────── */
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
-    .animate-pulse { animation: pulse 2s infinite; }
+    /* ── Code editor ────────────────────────────────────────────────────── */
+    .code-editor {
+      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-size: 12px; line-height: 1.65;
+      background: var(--bg); color: var(--text-2);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; width: 100%; resize: none;
+      outline: none; min-height: 52vh;
+      -webkit-overflow-scrolling: touch; display: block;
+      transition: border-color .15s;
+    }
+    .code-editor:focus { border-color: var(--border2); }
 
-    /* ── Scrollbar ───────────────────────────────────────────────────── */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 99px; }
+    /* ── Status msg ─────────────────────────────────────────────────────── */
+    .cfg-status { font-size: 11.5px; min-height: 18px; transition: color .15s; }
+    .cfg-status.ok    { color: var(--green); }
+    .cfg-status.warn  { color: var(--yellow); }
+    .cfg-status.error { color: var(--red); }
+    .cfg-status.muted { color: var(--text-3); }
   </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     TOP BAR
-═══════════════════════════════════════════════════════════════════════════ -->
-<header class="topbar">
-  <div class="topbar-brand">
-    <span style="font-size:1.4rem">🦙</span>
-    <div>
-      <h1>llamactl</h1>
-      <span>Local AI Stack Manager</span>
-    </div>
-  </div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <!-- Global status pill -->
-    {{if .LlamaSwap.IsRunning}}
-      <span class="badge badge-green"><span class="dot dot-green animate-pulse"></span>API running</span>
-    {{else}}
-      <span class="badge badge-red">API offline</span>
-    {{end}}
-    <button class="btn btn-ghost btn-sm"
-            hx-get="/" hx-target="body" hx-swap="outerHTML"
-            title="Refresh page">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-      <span style="display:none" class="sm:inline">Refresh</span>
-    </button>
-  </div>
-</header>
+<!-- Sidebar overlay (mobile) -->
+<div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     TABLET TAB NAV
-═══════════════════════════════════════════════════════════════════════════ -->
-<nav class="tab-nav" aria-label="Sections">
-  <button class="tab-btn active" id="ttab-services" onclick="showSection('services')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-    Services
-  </button>
-  <button class="tab-btn" id="ttab-models" onclick="showSection('models')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-    Models
-    <span class="badge badge-gray" style="font-size:.6rem;padding:1px 6px">{{len .Models.APIModels}}</span>
-  </button>
-  <button class="tab-btn" id="ttab-logs" onclick="showSection('logs')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Logs
-  </button>
-  <button class="tab-btn" id="ttab-config" onclick="showSection('config')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-    Config
-  </button>
-</nav>
+<div class="layout">
 
-<!-- ══════════════════════════════════════════════════════════════════════════
-     APP BODY
-═══════════════════════════════════════════════════════════════════════════ -->
-<div class="app-body">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SIDEBAR — single navigation for all breakpoints
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <aside class="sidebar" id="sidebar">
 
-  <!-- ── Sidebar (desktop ≥1024px) ─────────────────────────────────────── -->
-  <aside class="sidebar">
-    <p class="sidebar-label">Services</p>
-
-    <!-- llama-swap quick status -->
-    <div class="sidebar-svc">
-      <div class="sidebar-svc-name">
-        {{if .LlamaSwap.IsRunning}}
-          <span class="dot dot-green"></span>
-        {{else}}
-          <span class="dot dot-red"></span>
-        {{end}}
-        llama-swap
+    <!-- Brand + service status -->
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="sidebar-icon">🦙</div>
+        <div>
+          <div class="sidebar-name">llamactl</div>
+          <div class="sidebar-sub">Local AI Stack</div>
+        </div>
       </div>
-      <div class="sidebar-svc-meta">
-        {{if .LlamaSwap.IsRunning}}PID {{.LlamaSwap.PID}} · up {{.LlamaSwap.Uptime}}{{else}}stopped{{end}}
+
+      <!-- llama-swap pill -->
+      <div class="svc-pill">
+        <span class="dot {{if .LlamaSwap.IsRunning}}dot-green{{else}}dot-red{{end}}"></span>
+        <span class="svc-name">llama-swap</span>
+        <span class="svc-meta">{{if .LlamaSwap.IsRunning}}pid {{.LlamaSwap.PID}}{{else}}stopped{{end}}</span>
+      </div>
+      <!-- ComfyUI pill -->
+      <div class="svc-pill">
+        <span class="dot {{if .ComfyUI.IsRunning}}dot-green{{else}}dot-gray{{end}}"></span>
+        <span class="svc-name">ComfyUI</span>
+        <span class="svc-meta">{{if .ComfyUI.IsRunning}}pid {{.ComfyUI.PID}}{{else}}stopped{{end}}</span>
       </div>
     </div>
 
-    <!-- ComfyUI quick status -->
-    <div class="sidebar-svc">
-      <div class="sidebar-svc-name">
-        {{if .ComfyUI.IsRunning}}
-          <span class="dot dot-green"></span>
-        {{else}}
-          <span class="dot dot-red"></span>
-        {{end}}
-        ComfyUI
-      </div>
-      <div class="sidebar-svc-meta">
-        {{if .ComfyUI.IsRunning}}PID {{.ComfyUI.PID}} · up {{.ComfyUI.Uptime}}{{else}}stopped{{end}}
-      </div>
-    </div>
+    <!-- Nav items -->
+    <nav class="sidebar-nav">
+      <button class="nav-item active" id="nav-services" onclick="showSection('services')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+        Services
+      </button>
+      <button class="nav-item" id="nav-models" onclick="showSection('models')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        </svg>
+        Models
+        <span class="nav-count">{{len .Models.APIModels}}</span>
+      </button>
+      <button class="nav-item" id="nav-logs" onclick="showSection('logs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        Logs
+      </button>
+      <button class="nav-item" id="nav-config" onclick="showSection('config')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        Config
+      </button>
+    </nav>
 
-    <p class="sidebar-label" style="margin-top:16px">Navigate</p>
-    <button class="sidebar-item active" id="stab-services" onclick="showSection('services')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-      Services
-    </button>
-    <button class="sidebar-item" id="stab-models" onclick="showSection('models')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-      Models
-      <span class="badge badge-gray" style="font-size:.6rem;padding:1px 6px;margin-left:auto">{{len .Models.APIModels}}</span>
-    </button>
-    <button class="sidebar-item" id="stab-logs" onclick="showSection('logs')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      Logs
-    </button>
-    <button class="sidebar-item" id="stab-config" onclick="showSection('config')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-      Config
-    </button>
+    <!-- Footer -->
+    <div class="sidebar-footer">
+      <button class="nav-item" style="color:var(--text-3);font-size:12px"
+              hx-get="/" hx-target="body" hx-swap="outerHTML">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <polyline points="23 4 23 10 17 10"/>
+          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
   </aside>
 
-  <!-- ── Main content ───────────────────────────────────────────────────── -->
-  <main class="main-content">
-    <div class="content-inner">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- Mobile topbar (hidden on desktop) -->
+    <header class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Open menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-brand">🦙 llamactl</span>
+      <span class="badge {{if .LlamaSwap.IsRunning}}badge-green{{else}}badge-gray{{end}}">
+        {{if .LlamaSwap.IsRunning}}Running{{else}}Offline{{end}}
+      </span>
+    </header>
+
+    <div class="page">
 
       <!-- ════════════════════════════════════════════════════════════════
            SERVICES
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-services" class="section active">
+        <h1 class="section-title">Services</h1>
+        <p class="section-sub">Monitor and control your local AI stack.</p>
 
-        <!-- Summary stats row -->
-        <div class="stat-row">
+        <div class="stat-grid">
           <div class="stat">
-            <div class="stat-label">llama-swap</div>
+            <div class="stat-label">LLM API</div>
             <div class="stat-value" style="color:{{if .LlamaSwap.IsRunning}}var(--green){{else}}var(--red){{end}}">
-              {{if .LlamaSwap.IsRunning}}Running{{else}}Stopped{{end}}
+              {{if .LlamaSwap.IsRunning}}Up{{else}}Down{{end}}
             </div>
           </div>
           <div class="stat">
             <div class="stat-label">ComfyUI</div>
-            <div class="stat-value" style="color:{{if .ComfyUI.IsRunning}}var(--green){{else}}var(--red){{end}}">
-              {{if .ComfyUI.IsRunning}}Running{{else}}Stopped{{end}}
+            <div class="stat-value" style="color:{{if .ComfyUI.IsRunning}}var(--green){{else}}var(--text-3){{end}}">
+              {{if .ComfyUI.IsRunning}}Up{{else}}Off{{end}}
             </div>
           </div>
           <div class="stat">
@@ -363,107 +423,102 @@
             <div class="stat-value">{{len .Models.APIModels}}</div>
           </div>
           <div class="stat">
-            <div class="stat-label">In memory</div>
+            <div class="stat-label">In Memory</div>
             <div class="stat-value">{{len .LlamaSwap.LoadedModels}}</div>
           </div>
         </div>
 
-        <!-- Two-column grid for service cards on ≥640px -->
-        <div style="display:grid; gap:12px; grid-template-columns:1fr; margin-bottom:0">
-          <div style="display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
-
-            <!-- llama-swap card -->
-            <div class="card" style="margin-bottom:0">
-              <div class="svc-header">
-                {{if .LlamaSwap.IsRunning}}
-                  <span class="dot dot-green"></span>
-                  <span class="svc-name">llama-swap</span>
-                  <span class="badge badge-green">running</span>
-                {{else if .LlamaSwap.IsInstalled}}
-                  <span class="dot dot-yellow"></span>
-                  <span class="svc-name">llama-swap</span>
-                  <span class="badge badge-yellow">stopped</span>
-                {{else}}
-                  <span class="dot dot-red"></span>
-                  <span class="svc-name">llama-swap</span>
-                  <span class="badge badge-gray">not installed</span>
-                {{end}}
-                <div class="svc-actions">
-                  {{if .LlamaSwap.IsRunning}}
-                    <button class="btn btn-warn btn-sm"
-                            hx-post="/api/llamaswap/restart"
-                            hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-                      ↺ Restart
-                    </button>
-                    <button class="btn btn-danger btn-sm"
-                            hx-post="/api/llamaswap/stop"
-                            hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-                      ■ Stop
-                    </button>
-                  {{else}}
-                    <button class="btn btn-success btn-sm"
-                            hx-post="/api/llamaswap/start"
-                            hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
-                      ▶ Start
-                    </button>
-                  {{end}}
-                </div>
-              </div>
-              <dl class="info-list">
-                {{if .LlamaSwap.IsRunning}}
-                  <dt>PID</dt>    <dd>{{.LlamaSwap.PID}}</dd>
-                  <dt>Uptime</dt> <dd>{{.LlamaSwap.Uptime}}</dd>
-                {{end}}
-                <dt>API</dt>        <dd style="font-family:monospace;font-size:.72rem;word-break:break-all">{{.LlamaSwap.APIAddr}}</dd>
-                <dt>Auto-start</dt> <dd>{{if .LlamaSwap.AutoStart}}<span style="color:var(--green)">✓ enabled</span>{{else}}<span style="color:var(--text-dim)">disabled</span>{{end}}</dd>
-                {{if .LlamaSwap.LoadedModels}}
-                  <dt>Loaded</dt> <dd>{{range .LlamaSwap.LoadedModels}}<span class="badge badge-green" style="margin-right:3px;margin-bottom:2px">{{.}}</span>{{end}}</dd>
-                {{end}}
-              </dl>
+        <!-- llama-swap card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="dot {{if .LlamaSwap.IsRunning}}dot-green{{else if .LlamaSwap.IsInstalled}}dot-yellow{{else}}dot-red{{end}}"></span>
+            <span class="card-title">llama-swap</span>
+            {{if .LlamaSwap.IsRunning}}
+              <span class="badge badge-green">running</span>
+            {{else if .LlamaSwap.IsInstalled}}
+              <span class="badge badge-yellow">stopped</span>
+            {{else}}
+              <span class="badge badge-gray">not installed</span>
+            {{end}}
+            <div class="card-actions">
+              {{if .LlamaSwap.IsRunning}}
+                <button class="btn btn-default btn-sm"
+                        hx-post="/api/llamaswap/restart"
+                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  Restart
+                </button>
+                <button class="btn btn-danger btn-sm"
+                        hx-post="/api/llamaswap/stop"
+                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                  Stop
+                </button>
+              {{else}}
+                <button class="btn btn-success btn-sm"
+                        hx-post="/api/llamaswap/start"
+                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
+                  Start
+                </button>
+              {{end}}
             </div>
+          </div>
+          <dl class="info-dl">
+            {{if .LlamaSwap.IsRunning}}
+              <dt>PID</dt>    <dd>{{.LlamaSwap.PID}}</dd>
+              <dt>Uptime</dt> <dd>{{.LlamaSwap.Uptime}}</dd>
+              <dt>Loaded</dt> <dd>{{len .LlamaSwap.LoadedModels}} model(s) in memory</dd>
+            {{end}}
+            <dt>API</dt>        <dd><code>{{.LlamaSwap.APIAddr}}</code></dd>
+            <dt>Auto-start</dt> <dd>{{if .LlamaSwap.AutoStart}}Enabled{{else}}Disabled{{end}}</dd>
+          </dl>
+        </div>
 
-            <!-- ComfyUI card -->
-            <div class="card" style="margin-bottom:0">
-              <div class="svc-header">
-                {{if .ComfyUI.IsRunning}}
-                  <span class="dot dot-green"></span>
-                  <span class="svc-name">ComfyUI</span>
-                  <span class="badge badge-green">running</span>
-                {{else}}
-                  <span class="dot dot-red"></span>
-                  <span class="svc-name">ComfyUI</span>
-                  <span class="badge badge-gray">stopped</span>
-                {{end}}
-                <div class="svc-actions">
-                  {{if .ComfyUI.IsRunning}}
-                    <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-warn btn-sm">↗ Open</a>
-                    <button class="btn btn-danger btn-sm"
-                            hx-post="/api/comfyui/stop"
-                            hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-                      ■ Stop
-                    </button>
-                  {{else}}
-                    <button class="btn btn-success btn-sm"
-                            hx-post="/api/comfyui/start"
-                            hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),5000)">
-                      ▶ Start
-                    </button>
-                  {{end}}
-                </div>
-              </div>
-              <dl class="info-list">
-                {{if .ComfyUI.IsRunning}}
-                  <dt>PID</dt>    <dd>{{.ComfyUI.PID}}</dd>
-                  <dt>Uptime</dt> <dd>{{.ComfyUI.Uptime}}</dd>
-                  <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" style="color:var(--blue);text-decoration:underline;font-size:.72rem;word-break:break-all">{{.ComfyUI.URL}}</a></dd>
-                {{else}}
-                  <dt>Port</dt> <dd>{{.ComfyPort}}</dd>
-                  <dt>Note</dt> <dd style="color:var(--text-dim)">starts on demand</dd>
-                {{end}}
-              </dl>
+        <!-- ComfyUI card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="dot {{if .ComfyUI.IsRunning}}dot-green{{else}}dot-gray{{end}}"></span>
+            <span class="card-title">ComfyUI</span>
+            {{if .ComfyUI.IsRunning}}
+              <span class="badge badge-green">running</span>
+            {{else}}
+              <span class="badge badge-gray">stopped</span>
+            {{end}}
+            <div class="card-actions">
+              {{if .ComfyUI.IsRunning}}
+                <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-default btn-sm">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                  Open
+                </a>
+                <button class="btn btn-danger btn-sm"
+                        hx-post="/api/comfyui/stop"
+                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                  Stop
+                </button>
+              {{else}}
+                <button class="btn btn-success btn-sm"
+                        hx-post="/api/comfyui/start"
+                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),5000)">
+                  Start
+                </button>
+              {{end}}
             </div>
-
-          </div><!-- /grid -->
+          </div>
+          <dl class="info-dl">
+            {{if .ComfyUI.IsRunning}}
+              <dt>PID</dt>    <dd>{{.ComfyUI.PID}}</dd>
+              <dt>Uptime</dt> <dd>{{.ComfyUI.Uptime}}</dd>
+              <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" style="color:var(--blue)"><code>{{.ComfyUI.URL}}</code></a></dd>
+            {{else}}
+              <dt>Port</dt> <dd>{{.ComfyPort}}</dd>
+              <dt>Note</dt> <dd style="color:var(--text-3)">Starts on demand</dd>
+            {{end}}
+          </dl>
         </div>
       </div><!-- /sec-services -->
 
@@ -471,30 +526,30 @@
            MODELS
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-models" class="section">
-        <div class="card">
-          <div class="card-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-            Models
-            <span class="badge badge-gray" style="margin-left:2px">{{len .Models.APIModels}} registered</span>
-          </div>
+        <h1 class="section-title">Models</h1>
+        <p class="section-sub">{{len .Models.APIModels}} registered &middot; {{len .LlamaSwap.LoadedModels}} in memory</p>
+
+        <div class="card" style="padding:0; overflow:hidden">
           {{if .Models.APIReachable}}
-            <div style="overflow-x:auto">
-              <table class="data-table">
+            <div class="table-wrap">
+              <table>
                 <thead>
                   <tr>
                     <th>Model ID</th>
+                    <th>Type</th>
                     <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {{range .Models.APIModels}}
                   <tr>
-                    <td style="font-family:monospace;font-size:.72rem;word-break:break-all;color:#d4d4d8">{{.ID}}</td>
+                    <td class="mono-text">{{.ID}}</td>
+                    <td style="color:var(--text-3);font-size:11.5px">{{.Object}}</td>
                     <td>
                       {{if index $.Models.LoadedIDs .ID}}
-                        <span class="badge badge-green">● in memory</span>
+                        <span class="badge badge-green">&#9679; loaded</span>
                       {{else}}
-                        <span class="badge badge-gray">unloaded</span>
+                        <span class="badge badge-gray">idle</span>
                       {{end}}
                     </td>
                   </tr>
@@ -503,10 +558,13 @@
               </table>
             </div>
           {{else}}
-            <div style="text-align:center;padding:32px;color:var(--text-dim)">
-              <div style="font-size:2rem;margin-bottom:8px">🔌</div>
-              <p style="font-size:.875rem">llama-swap is not running</p>
-              <p style="font-size:.78rem;margin-top:4px">Start it from the Services tab to see models</p>
+            <div style="padding:32px 20px; text-align:center; color:var(--text-3)">
+              <p style="font-size:13px; margin-bottom:14px">llama-swap is not running.</p>
+              <button class="btn btn-success btn-sm"
+                      hx-post="/api/llamaswap/start"
+                      hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
+                Start llama-swap
+              </button>
             </div>
           {{end}}
         </div>
@@ -516,26 +574,20 @@
            LOGS
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-logs" class="section">
+        <h1 class="section-title">Logs</h1>
+        <p class="section-sub">Tail service output in real time.</p>
+
         <div class="card">
-          <div class="card-title" style="justify-content:space-between;margin-bottom:12px">
-            <span style="display:flex;align-items:center;gap:8px">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              Logs
-            </span>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-ghost btn-sm" id="log-btn-ls" onclick="loadLogs('llamaswap')">llama-swap</button>
-              <button class="btn btn-ghost btn-sm" id="log-btn-cu" onclick="loadLogs('comfyui')">ComfyUI</button>
+          <div style="display:flex; align-items:center; margin-bottom:10px">
+            <div class="log-tabs">
+              <button class="log-tab active" id="ltab-llamaswap" onclick="loadLogs('llamaswap')">llama-swap</button>
+              <button class="log-tab" id="ltab-comfyui" onclick="loadLogs('comfyui')">ComfyUI</button>
             </div>
-          </div>
-          <div id="log-container" class="mono" style="max-height:60vh;color:#a1a1aa">
-            Select a service above to view logs.
-          </div>
-          <p style="font-size:.68rem;color:var(--muted);margin-top:8px">
-            Auto-refreshes every 5 s when active.
-            <span id="log-indicator" style="display:none">
-              · <span class="animate-pulse" style="color:var(--green)">● live</span>
+            <span class="live-indicator" id="live-ind">
+              <span class="live-dot"></span>live
             </span>
-          </p>
+          </div>
+          <div class="log-box" id="log-box">Select a service to view logs.</div>
         </div>
       </div><!-- /sec-logs -->
 
@@ -543,645 +595,178 @@
            CONFIG
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-config" class="section">
+        <h1 class="section-title">Config</h1>
+        <p class="section-sub" style="font-family:ui-monospace,monospace;font-size:11px;letter-spacing:0">{{.ConfigFile}}</p>
+
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-            <div>
-              <div class="card-title" style="margin-bottom:2px">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                Config Editor
-              </div>
-              <p style="font-size:.7rem;color:var(--text-dim);word-break:break-all">{{.ConfigFile}}</p>
-            </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="btn btn-ghost btn-sm" onclick="loadConfig()">↺ Reload</button>
-              <button class="btn btn-success btn-sm" id="save-btn" onclick="saveConfig()" disabled>✓ Save</button>
-            </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap">
+            <button class="btn btn-default btn-sm" onclick="loadConfig()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Reload
+            </button>
+            <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveConfig()" disabled>
+              Save
+            </button>
+            <span class="cfg-status muted" id="cfg-status"></span>
           </div>
-          <div id="config-status" style="font-size:.72rem;min-height:18px;margin-bottom:8px"></div>
-          <textarea id="config-editor" class="code-editor"
-            spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"
+          <textarea
+            class="code-editor"
+            id="config-editor"
+            spellcheck="false"
+            autocorrect="off"
+            autocapitalize="off"
             oninput="onConfigEdit()"
-            placeholder="Click ↺ Reload to load the config…"></textarea>
-          <p style="font-size:.68rem;color:var(--muted);margin-top:8px">
-            llama-swap auto-reloads on save · <code style="color:var(--text-dim)">--watch-config</code> is active
+            placeholder="Loading configuration…"></textarea>
+          <p style="font-size:11px; color:var(--text-3); margin-top:10px">
+            llama-swap reloads automatically on save
+            (<code style="font-size:10px">--watch-config</code>).
           </p>
         </div>
       </div><!-- /sec-config -->
 
-    </div><!-- /content-inner -->
-  </main>
-</div><!-- /app-body -->
-
-<!-- ══════════════════════════════════════════════════════════════════════════
-     BOTTOM NAV (mobile only)
-═══════════════════════════════════════════════════════════════════════════ -->
-<nav class="bottom-nav" aria-label="Main navigation">
-  <button class="bnav-btn active" id="btab-services" onclick="showSection('services')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-    Services
-  </button>
-  <button class="bnav-btn" id="btab-models" onclick="showSection('models')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-    Models
-  </button>
-  <button class="bnav-btn" id="btab-logs" onclick="showSection('logs')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Logs
-  </button>
-  <button class="bnav-btn" id="btab-config" onclick="showSection('config')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-    Config
-  </button>
-</nav>
+    </div><!-- /.page -->
+  </div><!-- /.main -->
+</div><!-- /.layout -->
 
 <script>
-  // ── Section / tab switching ───────────────────────────────────────────────
-  const SECTIONS = ['services', 'models', 'logs', 'config'];
-  let activeSection = 'services';
+// ── Sidebar toggle (mobile) ────────────────────────────────────────────────
+function toggleSidebar() {
+  const s = document.getElementById('sidebar');
+  const o = document.getElementById('overlay');
+  const open = s.classList.toggle('open');
+  o.classList.toggle('open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
 
-  function showSection(name) {
-    SECTIONS.forEach(s => {
-      // Section visibility
-      const sec = document.getElementById('sec-' + s);
-      if (sec) sec.classList.toggle('active', s === name);
+// ── Section navigation ─────────────────────────────────────────────────────
+const SECTIONS = ['services', 'models', 'logs', 'config'];
+let activeSection = 'services';
 
-      // Bottom nav
-      const bt = document.getElementById('btab-' + s);
-      if (bt) bt.classList.toggle('active', s === name);
-
-      // Tablet tabs
-      const tt = document.getElementById('ttab-' + s);
-      if (tt) tt.classList.toggle('active', s === name);
-
-      // Sidebar items
-      const st = document.getElementById('stab-' + s);
-      if (st) st.classList.toggle('active', s === name);
-    });
-
-    activeSection = name;
-
-    if (name === 'logs') {
-      if (currentSvc) startLogPolling(currentSvc);
-    } else {
-      if (logInterval) { clearInterval(logInterval); logInterval = null; }
-      document.getElementById('log-indicator').style.display = 'none';
-    }
-
-    if (name === 'config') loadConfig();
-  }
-
-  // ── Logs ─────────────────────────────────────────────────────────────────
-  let currentSvc = null;
-  let logInterval = null;
-
-  async function renderLogs(svc) {
-    try {
-      const resp = await fetch('/api/logs?service=' + svc + '&lines=200');
-      const data = await resp.json();
-      const box = document.getElementById('log-container');
-      const atBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 40;
-      if (data.lines && data.lines.length) {
-        box.textContent = data.lines.join('\n');
-      } else if (data.error) {
-        box.textContent = '⚠ ' + data.error;
-      } else {
-        box.textContent = '(no log entries yet)';
-      }
-      if (atBottom) box.scrollTop = box.scrollHeight;
-    } catch(e) {
-      document.getElementById('log-container').textContent = '⚠ ' + e.message;
-    }
-  }
-
-  function startLogPolling(svc) {
-    if (logInterval) clearInterval(logInterval);
-    renderLogs(svc);
-    logInterval = setInterval(() => renderLogs(svc), 5000);
-    document.getElementById('log-indicator').style.display = 'inline';
-
-    // Highlight active log button
-    ['ls','cu'].forEach(k => {
-      const btn = document.getElementById('log-btn-' + k);
-      if (btn) btn.style.background = svc === (k === 'ls' ? 'llamaswap' : 'comfyui') ? '#1d4ed8' : '';
-    });
-  }
-
-  function loadLogs(svc) {
-    currentSvc = svc;
-    startLogPolling(svc);
-  }
-
-  // ── HTMX page refresh ─────────────────────────────────────────────────────
-  document.body.addEventListener('refresh', () => {
-    htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' }).then(() => {
-      showSection(activeSection);
-      if (currentSvc) startLogPolling(currentSvc);
-    });
+function showSection(name) {
+  SECTIONS.forEach(function(s) {
+    document.getElementById('sec-' + s).classList.toggle('active', s === name);
+    document.getElementById('nav-' + s).classList.toggle('active', s === name);
   });
+  activeSection = name;
+  closeSidebar();
 
-  // ── Config editor ─────────────────────────────────────────────────────────
-  let configLoaded = false;
-
-  function setStatus(msg, color) {
-    const el = document.getElementById('config-status');
-    const c = { green: '#22c55e', yellow: '#eab308', red: '#ef4444', gray: '#71717a' };
-    el.style.color = c[color] || c.gray;
-    el.textContent = msg;
+  if (name === 'logs') {
+    if (currentSvc) startLogPolling(currentSvc);
+    else loadLogs('llamaswap');
+  } else {
+    stopLogPolling();
   }
+  if (name === 'config' && !configLoaded) loadConfig();
+}
 
-  function onConfigEdit() {
-    document.getElementById('save-btn').disabled = false;
-    setStatus('Unsaved changes', 'yellow');
-  }
+// ── Logs ───────────────────────────────────────────────────────────────────
+var currentSvc = null;
+var logTimer = null;
 
-  async function loadConfig() {
-    if (configLoaded && document.getElementById('save-btn').disabled) return; // already loaded, no changes
-    setStatus('Loading…', 'gray');
-    try {
-      const resp = await fetch('/api/config');
-      const data = await resp.json();
-      if (data.error) { setStatus('Error: ' + data.error, 'red'); return; }
+function loadLogs(svc) {
+  ['llamaswap', 'comfyui'].forEach(function(s) {
+    document.getElementById('ltab-' + s).classList.toggle('active', s === svc);
+  });
+  currentSvc = svc;
+  startLogPolling(svc);
+}
+
+function startLogPolling(svc) {
+  stopLogPolling();
+  fetchLogs(svc);
+  document.getElementById('live-ind').classList.add('on');
+  logTimer = setInterval(function() { fetchLogs(svc); }, 5000);
+}
+
+function stopLogPolling() {
+  if (logTimer) { clearInterval(logTimer); logTimer = null; }
+  var el = document.getElementById('live-ind');
+  if (el) el.classList.remove('on');
+}
+
+function fetchLogs(svc) {
+  fetch('/api/logs?service=' + svc + '&lines=200')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var box = document.getElementById('log-box');
+      var atBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 50;
+      box.textContent = (data.lines && data.lines.length)
+        ? data.lines.join('\n')
+        : (data.error ? 'Error: ' + data.error : '(no entries)');
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    })
+    .catch(function(e) {
+      document.getElementById('log-box').textContent = 'Failed: ' + e.message;
+    });
+}
+
+// ── Config editor ──────────────────────────────────────────────────────────
+var configLoaded = false;
+
+function setCfgStatus(msg, type) {
+  var el = document.getElementById('cfg-status');
+  el.className = 'cfg-status ' + (type || 'muted');
+  el.textContent = msg;
+}
+
+function onConfigEdit() {
+  document.getElementById('save-btn').disabled = false;
+  setCfgStatus('Unsaved changes', 'warn');
+}
+
+function loadConfig() {
+  setCfgStatus('Loading\u2026', 'muted');
+  fetch('/api/config')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { setCfgStatus('Error: ' + data.error, 'error'); return; }
       document.getElementById('config-editor').value = data.content;
       document.getElementById('save-btn').disabled = true;
-      setStatus('', 'gray');
+      setCfgStatus('Loaded', 'ok');
       configLoaded = true;
-    } catch(e) { setStatus('Error: ' + e.message, 'red'); }
-  }
+    })
+    .catch(function(e) { setCfgStatus('Error: ' + e.message, 'error'); });
+}
 
-  async function saveConfig() {
-    const content = document.getElementById('config-editor').value;
-    setStatus('Saving…', 'gray');
-    document.getElementById('save-btn').disabled = true;
-    try {
-      const resp = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
-      const data = await resp.json();
-      if (data.error) {
-        setStatus('Save failed: ' + data.error, 'red');
-        document.getElementById('save-btn').disabled = false;
-        return;
-      }
-      setStatus('Saved ✓  —  llama-swap is reloading…', 'green');
-    } catch(e) {
-      setStatus('Error: ' + e.message, 'red');
+function saveConfig() {
+  var content = document.getElementById('config-editor').value;
+  document.getElementById('save-btn').disabled = true;
+  setCfgStatus('Saving\u2026', 'muted');
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: content })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) {
+      setCfgStatus('Error: ' + data.error, 'error');
       document.getElementById('save-btn').disabled = false;
+      return;
     }
-  }
+    setCfgStatus('Saved \u2014 llama-swap reloading\u2026', 'ok');
+  })
+  .catch(function(e) {
+    setCfgStatus('Error: ' + e.message, 'error');
+    document.getElementById('save-btn').disabled = false;
+  });
+}
 
-  // Auto-load config on first page load
-  loadConfig();
+// ── HTMX page refresh ──────────────────────────────────────────────────────
+document.body.addEventListener('refresh', function() {
+  htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' }).then(function() {
+    showSection(activeSection);
+    if (activeSection === 'logs' && currentSvc) startLogPolling(currentSvc);
+  });
+});
 </script>
-</body>
-</html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>llamactl — AI Stack</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
-  <style>
-    /* ── Dots & badges ─────────────────────────────────────────────────── */
-    .dot-green  { background: #22c55e; }
-    .dot-red    { background: #ef4444; }
-    .dot-yellow { background: #eab308; }
-    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-
-    .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:0.68rem; font-weight:700; white-space:nowrap; }
-    .badge-green { background:#14532d; color:#86efac; }
-    .badge-red   { background:#7f1d1d; color:#fca5a5; }
-    .badge-gray  { background:#1f2937; color:#9ca3af; }
-
-    /* ── Buttons — min 44 px touch target ─────────────────────────────── */
-    .btn {
-      cursor:pointer; padding:10px 16px; border-radius:8px; font-size:0.8rem;
-      font-weight:600; transition:opacity .15s, background .15s; border:none;
-      min-height:40px; display:inline-flex; align-items:center; gap:4px;
-      white-space:nowrap; touch-action:manipulation;
-    }
-    .btn:disabled    { opacity:.4; cursor:not-allowed; }
-    .btn:active:not(:disabled) { opacity:.75; }
-    .btn-green { background:#16a34a; color:#fff; }
-    .btn-red   { background:#b91c1c; color:#fff; }
-    .btn-blue  { background:#2563eb; color:#fff; }
-    .btn-gray  { background:#374151; color:#e5e7eb; }
-
-    /* ── Cards ─────────────────────────────────────────────────────────── */
-    .card { background:#111827; border:1px solid #1f2937; border-radius:12px; padding:16px; }
-    @media (min-width:640px) { .card { padding:20px; } }
-
-    /* ── Monospace boxes ────────────────────────────────────────────────── */
-    .mono-box {
-      font-family:ui-monospace, 'Cascadia Code', monospace;
-      font-size:0.7rem; line-height:1.5;
-      background:#0f172a; padding:12px; border-radius:8px;
-      overflow-y:auto; white-space:pre-wrap; word-break:break-all;
-      -webkit-overflow-scrolling:touch;
-    }
-
-    /* ── Bottom nav (mobile) ────────────────────────────────────────────── */
-    .bottom-nav {
-      position:fixed; bottom:0; left:0; right:0;
-      background:#111827; border-top:1px solid #1f2937;
-      display:flex;
-      padding-bottom:env(safe-area-inset-bottom, 0px);
-      z-index:50;
-    }
-    .nav-tab {
-      flex:1; display:flex; flex-direction:column; align-items:center;
-      justify-content:center; padding:10px 4px 8px;
-      font-size:0.65rem; color:#6b7280; cursor:pointer;
-      transition:color .15s; border:none; background:transparent;
-      touch-action:manipulation; gap:3px;
-    }
-    .nav-tab.active { color:#60a5fa; }
-    .nav-tab svg { width:20px; height:20px; }
-
-    /* ── Section visibility ─────────────────────────────────────────────── */
-    .section { display:none; }
-    .section.active { display:block; }
-    @media (min-width:640px) {
-      .section { display:block !important; }
-      .bottom-nav { display:none; }
-    }
-
-    /* Desktop: all sections visible, no bottom nav offset */
-    @media (min-width:640px) {
-      body { padding-bottom: 0 !important; }
-    }
-
-    /* DL grid */
-    dl.info { display:grid; grid-template-columns:auto 1fr; gap:4px 16px; }
-    dl.info dt { color:#9ca3af; font-size:0.82rem; white-space:nowrap; }
-    dl.info dd { color:#e5e7eb; font-size:0.82rem; }
-  </style>
-</head>
-<body class="min-h-screen" style="padding:12px 12px 80px; padding-bottom:calc(80px + env(safe-area-inset-bottom,0px))">
-
-  <!-- ── Header ──────────────────────────────────────────────────────────── -->
-  <div class="flex items-center justify-between mb-4">
-    <div>
-      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-white leading-tight">🦙 llamactl</h1>
-      <p class="text-gray-400 text-xs sm:text-sm">Local AI Stack</p>
-    </div>
-    <button class="btn btn-gray text-xs"
-            hx-get="/" hx-target="body" hx-swap="outerHTML" title="Refresh">
-      ↻ Refresh
-    </button>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       SECTION: Services
-  ═══════════════════════════════════════════════════════════════════════ -->
-  <div id="sec-services" class="section active">
-
-    <!-- llama-swap card -->
-    <div class="card mb-3">
-      <div class="flex flex-wrap items-center gap-2 mb-3">
-        {{if .LlamaSwap.IsRunning}}
-          <span class="dot dot-green"></span>
-          <span class="font-semibold text-white">llama-swap</span>
-          <span class="badge badge-green">running</span>
-        {{else if .LlamaSwap.IsInstalled}}
-          <span class="dot dot-yellow"></span>
-          <span class="font-semibold text-white">llama-swap</span>
-          <span class="badge badge-red">stopped</span>
-        {{else}}
-          <span class="dot dot-red"></span>
-          <span class="font-semibold text-white">llama-swap</span>
-          <span class="badge badge-gray">not installed</span>
-        {{end}}
-        <div class="flex gap-2 ml-auto flex-wrap">
-          {{if .LlamaSwap.IsRunning}}
-            <button class="btn btn-blue"
-                    hx-post="/api/llamaswap/restart"
-                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-              ↺ Restart
-            </button>
-            <button class="btn btn-red"
-                    hx-post="/api/llamaswap/stop"
-                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-              ■ Stop
-            </button>
-          {{else}}
-            <button class="btn btn-green"
-                    hx-post="/api/llamaswap/start"
-                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
-              ▶ Start
-            </button>
-          {{end}}
-        </div>
-      </div>
-      <dl class="info">
-        {{if .LlamaSwap.IsRunning}}
-          <dt>PID</dt>    <dd>{{.LlamaSwap.PID}}</dd>
-          <dt>Uptime</dt> <dd>{{.LlamaSwap.Uptime}}</dd>
-        {{end}}
-        <dt>API</dt>        <dd class="font-mono text-xs break-all">{{.LlamaSwap.APIAddr}}</dd>
-        <dt>Auto-start</dt> <dd>{{if .LlamaSwap.AutoStart}}✓ enabled{{else}}disabled{{end}}</dd>
-        {{if .LlamaSwap.APIReachable}}
-          <dt>In memory</dt> <dd>{{len .LlamaSwap.LoadedModels}} model(s)</dd>
-        {{end}}
-      </dl>
-    </div>
-
-    <!-- ComfyUI card -->
-    <div class="card mb-3">
-      <div class="flex flex-wrap items-center gap-2 mb-3">
-        {{if .ComfyUI.IsRunning}}
-          <span class="dot dot-green"></span>
-          <span class="font-semibold text-white">ComfyUI</span>
-          <span class="badge badge-green">running</span>
-        {{else}}
-          <span class="dot dot-red"></span>
-          <span class="font-semibold text-white">ComfyUI</span>
-          <span class="badge badge-red">stopped</span>
-        {{end}}
-        <div class="flex gap-2 ml-auto flex-wrap">
-          {{if .ComfyUI.IsRunning}}
-            <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-blue">↗ Open</a>
-            <button class="btn btn-red"
-                    hx-post="/api/comfyui/stop"
-                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
-              ■ Stop
-            </button>
-          {{else}}
-            <button class="btn btn-green"
-                    hx-post="/api/comfyui/start"
-                    hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),5000)">
-              ▶ Start
-            </button>
-          {{end}}
-        </div>
-      </div>
-      <dl class="info">
-        {{if .ComfyUI.IsRunning}}
-          <dt>PID</dt>    <dd>{{.ComfyUI.PID}}</dd>
-          <dt>Uptime</dt> <dd>{{.ComfyUI.Uptime}}</dd>
-          <dt>URL</dt>    <dd><a href="http://{{.ComfyUI.URL}}" target="_blank" class="text-blue-400 underline text-xs break-all">{{.ComfyUI.URL}}</a></dd>
-        {{else}}
-          <dt>Port</dt> <dd>{{.ComfyPort}}</dd>
-          <dt>Note</dt> <dd class="text-gray-500">starts on demand</dd>
-        {{end}}
-      </dl>
-    </div>
-
-    <!-- Models summary (desktop only inline; mobile users tap Models tab) -->
-    <div class="card hidden sm:block">
-      <h2 class="font-semibold text-white mb-3">
-        Models <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
-      </h2>
-      {{if .Models.APIReachable}}
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-gray-500 border-b border-gray-800">
-                <th class="text-left pb-2 pr-4">Model ID</th>
-                <th class="text-left pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Models.APIModels}}
-              <tr class="border-b border-gray-900 hover:bg-gray-800/30">
-                <td class="py-2 pr-4 text-gray-200 font-mono text-xs break-all">{{.ID}}</td>
-                <td class="py-2">
-                  {{if index $.Models.LoadedIDs .ID}}
-                    <span class="badge badge-green">● loaded</span>
-                  {{else}}
-                    <span class="badge badge-gray">unloaded</span>
-                  {{end}}
-                </td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-      {{else}}
-        <p class="text-gray-500 text-sm">llama-swap is not reachable — start it to see models.</p>
-      {{end}}
-    </div>
-
-  </div><!-- /sec-services -->
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       SECTION: Models (mobile)
-  ═══════════════════════════════════════════════════════════════════════ -->
-  <div id="sec-models" class="section">
-    <div class="card">
-      <h2 class="font-semibold text-white mb-3">
-        Models <span class="text-gray-500 font-normal text-sm">({{len .Models.APIModels}} registered)</span>
-      </h2>
-      {{if .Models.APIReachable}}
-        <div class="overflow-x-auto -mx-1">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-gray-500 border-b border-gray-800">
-                <th class="text-left pb-2 pr-4 pl-1">Model ID</th>
-                <th class="text-left pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Models.APIModels}}
-              <tr class="border-b border-gray-900">
-                <td class="py-2 pr-4 pl-1 text-gray-200 font-mono text-xs break-all">{{.ID}}</td>
-                <td class="py-2">
-                  {{if index $.Models.LoadedIDs .ID}}
-                    <span class="badge badge-green">● loaded</span>
-                  {{else}}
-                    <span class="badge badge-gray">unloaded</span>
-                  {{end}}
-                </td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-      {{else}}
-        <p class="text-gray-500 text-sm">llama-swap is not running.</p>
-      {{end}}
-    </div>
-  </div><!-- /sec-models -->
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       SECTION: Logs
-  ═══════════════════════════════════════════════════════════════════════ -->
-  <div id="sec-logs" class="section">
-    <div class="card">
-      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 class="font-semibold text-white">Logs</h2>
-        <div class="flex gap-2">
-          <button class="btn btn-gray" onclick="loadLogs('llamaswap')">llama-swap</button>
-          <button class="btn btn-gray" onclick="loadLogs('comfyui')">ComfyUI</button>
-        </div>
-      </div>
-      <div id="log-container" class="mono-box text-gray-400" style="max-height:60vh">
-        Tap a service above to view logs.
-      </div>
-      <p class="text-gray-600 text-xs mt-2">Auto-refreshes every 5 s.</p>
-    </div>
-  </div><!-- /sec-logs -->
-
-  <!-- ══════════════════════════════════════════════════════════════════════
-       SECTION: Config
-  ═══════════════════════════════════════════════════════════════════════ -->
-  <div id="sec-config" class="section">
-    <div class="card">
-      <div class="flex items-start justify-between mb-3 gap-3">
-        <div class="min-w-0">
-          <h2 class="font-semibold text-white">Config Editor</h2>
-          <p class="text-gray-500 text-xs mt-0.5 break-all">{{.ConfigFile}}</p>
-        </div>
-        <div class="flex gap-2 flex-shrink-0">
-          <button class="btn btn-gray" onclick="loadConfig()">↺</button>
-          <button class="btn btn-green" id="save-btn" onclick="saveConfig()" disabled>✓ Save</button>
-        </div>
-      </div>
-      <div id="config-status" class="text-xs mb-2 text-gray-500 min-h-[1rem]"></div>
-      <textarea id="config-editor"
-        class="w-full mono-box text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-        style="min-height:55vh"
-        spellcheck="false"
-        autocorrect="off" autocapitalize="off"
-        oninput="document.getElementById('save-btn').disabled=false; setStatus('Unsaved changes', 'yellow')"
-        placeholder="Tap ↺ to load…"></textarea>
-      <p class="text-gray-600 text-xs mt-2">
-        llama-swap auto-reloads on save (<code>--watch-config</code>).
-      </p>
-    </div>
-  </div><!-- /sec-config -->
-
-  <!-- ── Bottom navigation (mobile only) ─────────────────────────────────── -->
-  <nav class="bottom-nav sm:hidden" role="navigation" aria-label="Main">
-    <button class="nav-tab active" id="tab-services" onclick="showSection('services')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-      </svg>
-      Services
-    </button>
-    <button class="nav-tab" id="tab-models" onclick="showSection('models')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-      </svg>
-      Models
-    </button>
-    <button class="nav-tab" id="tab-logs" onclick="showSection('logs')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-      </svg>
-      Logs
-    </button>
-    <button class="nav-tab" id="tab-config" onclick="showSection('config')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
-        <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
-      </svg>
-      Config
-    </button>
-  </nav>
-
-  <!-- ── Scripts ─────────────────────────────────────────────────────────── -->
-  <script>
-    // ── Section / tab navigation (mobile) ────────────────────────────────
-    const SECTIONS = ['services', 'models', 'logs', 'config'];
-    let activeSection = 'services';
-
-    function showSection(name) {
-      SECTIONS.forEach(s => {
-        document.getElementById('sec-' + s).classList.toggle('active', s === name);
-        const tab = document.getElementById('tab-' + s);
-        if (tab) tab.classList.toggle('active', s === name);
-      });
-      activeSection = name;
-      // Start log auto-refresh when switching to logs
-      if (name === 'logs' && currentSvc) startLogPolling(currentSvc);
-      if (name !== 'logs' && logInterval) { clearInterval(logInterval); logInterval = null; }
-    }
-
-    // ── Logs ─────────────────────────────────────────────────────────────
-    let currentSvc = null;
-    let logInterval = null;
-
-    async function renderLogs(svc) {
-      const resp = await fetch(`/api/logs?service=${svc}&lines=150`);
-      const data = await resp.json();
-      const box = document.getElementById('log-container');
-      const atBottom = box.scrollHeight - box.scrollTop <= box.clientHeight + 30;
-      if (data.lines && data.lines.length) {
-        box.textContent = data.lines.join('\n');
-      } else if (data.error) {
-        box.textContent = 'Error: ' + data.error;
-      } else {
-        box.textContent = '(no log entries)';
-      }
-      if (atBottom) box.scrollTop = box.scrollHeight;
-    }
-
-    function startLogPolling(svc) {
-      if (logInterval) clearInterval(logInterval);
-      renderLogs(svc);
-      logInterval = setInterval(() => renderLogs(svc), 5000);
-    }
-
-    function loadLogs(svc) {
-      currentSvc = svc;
-      startLogPolling(svc);
-    }
-
-    // ── Page refresh via HTMX event ────────────────────────────────────
-    document.body.addEventListener('refresh', () => {
-      htmx.ajax('GET', '/', {target: 'body', swap: 'outerHTML'}).then(() => {
-        showSection(activeSection);
-        if (currentSvc) startLogPolling(currentSvc);
-      });
-    });
-
-    // ── Config editor ─────────────────────────────────────────────────
-    function setStatus(msg, color) {
-      const el = document.getElementById('config-status');
-      const colors = { green:'text-green-400', yellow:'text-yellow-400', red:'text-red-400', gray:'text-gray-500' };
-      el.className = 'text-xs mb-2 ' + (colors[color] || colors.gray);
-      el.textContent = msg;
-    }
-
-    async function loadConfig() {
-      setStatus('Loading…', 'gray');
-      try {
-        const resp = await fetch('/api/config');
-        const data = await resp.json();
-        if (data.error) { setStatus('Error: ' + data.error, 'red'); return; }
-        document.getElementById('config-editor').value = data.content;
-        document.getElementById('save-btn').disabled = true;
-        setStatus('Loaded ✓', 'green');
-      } catch(e) { setStatus('Error: ' + e.message, 'red'); }
-    }
-
-    async function saveConfig() {
-      const content = document.getElementById('config-editor').value;
-      setStatus('Saving…', 'gray');
-      document.getElementById('save-btn').disabled = true;
-      try {
-        const resp = await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content })
-        });
-        const data = await resp.json();
-        if (data.error) {
-          setStatus('Save failed: ' + data.error, 'red');
-          document.getElementById('save-btn').disabled = false;
-          return;
-        }
-        setStatus('Saved ✓ — llama-swap reloading…', 'green');
-      } catch(e) {
-        setStatus('Error: ' + e.message, 'red');
-        document.getElementById('save-btn').disabled = false;
-      }
-    }
-
-    // Auto-load config on page load
-    loadConfig();
-  </script>
 </body>
 </html>
