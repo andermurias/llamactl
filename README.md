@@ -105,7 +105,35 @@ llamactl comfyui start   # Start ComfyUI server (port 8188)
 llamactl comfyui stop    # Stop ComfyUI
 llamactl comfyui status  # Show ComfyUI process state
 llamactl comfyui logs    # Tail ComfyUI log
+
+# Web UI (dashboard at http://localhost:3333)
+llamactl web start       # Start embedded web dashboard
+llamactl web stop        # Stop web dashboard
+llamactl web restart     # Restart web dashboard
+llamactl web status      # PID, uptime, URL
+llamactl web enable      # Auto-start web UI at login
+llamactl web disable     # Disable auto-start
+
+# Config editor
+llamactl config edit     # Open llama-swap.yaml in $EDITOR (validates on save)
+llamactl config show     # Print current config
+llamactl config reload   # Reload config without restart (SIGHUP)
 ```
+
+---
+
+## Web dashboard
+
+Open `http://localhost:3333` after `llamactl web start`.
+
+| Section  | What it shows |
+|----------|---------------|
+| Services | llama-swap and ComfyUI status, PID, uptime, start/stop/restart buttons |
+| Models   | All registered models with loaded / idle status |
+| Logs     | Live-tailing log viewer — switch between llama-swap and ComfyUI |
+| Config   | Edit `llama-swap.yaml` directly in the browser; llama-swap auto-reloads on save |
+
+The sidebar is always visible on desktop and slides in from the left via hamburger on mobile.
 
 ---
 
@@ -312,17 +340,30 @@ my-new-model:
 ```
 ~/AI/
 ├── llama-swap.yaml          # Central config — all model routing lives here
-├── llamactl/                # Go source for the llamactl CLI tool
+├── llamactl/                # Go CLI + embedded web UI source
 │   ├── main.go
-│   ├── Makefile             # make install VERSION=v1.0.0
+│   ├── Makefile             # make build / install / test / lint
+│   ├── README.md            # llamactl developer docs
+│   ├── CHANGELOG.md         # version history
 │   ├── go.mod / go.sum
-│   ├── cmd/                 # Cobra commands (start/stop/restart/status/…)
-│   └── internal/            # config, launchd, llamaswap, comfyui packages
+│   ├── bin/llamactl         # compiled binary committed to git (for git-pull upgrade)
+│   ├── cmd/                 # Cobra commands: start/stop/restart/status/logs/models/
+│   │   ├── web/             #   llamactl web subcommand group
+│   │   └── config/          #   llamactl config subcommand group
+│   └── internal/
+│       ├── config/          # runtime paths & constants
+│       ├── launchd/         # plist write + bootstrap/bootout/kickstart helpers
+│       ├── llamaswap/       # llama-swap API client
+│       ├── service/         # business logic: start/stop/status (no UI code)
+│       ├── comfyui/         # ComfyUI process helpers
+│       ├── updater/         # version check
+│       └── web/             # embedded HTTP server (handlers + templates + static)
 ├── scripts/
-│   ├── llamactl             # Legacy bash script (superseded by Go binary)
-│   ├── install.sh           # Interactive first-time installer
-│   ├── install-llama-swap.sh# Standalone llama-swap binary updater
-│   ├── download-models.sh   # Download GGUF models
+│   ├── llamactl             # deployed binary (symlinked from PATH)
+│   ├── install.sh           # interactive first-time installer
+│   ├── install-llama-swap.sh# standalone llama-swap binary updater
+│   ├── download-models.sh   # download GGUF models
+│   ├── test-api.sh          # integration test suite for the llama-swap API
 │   ├── start-kokoro.sh      # TTS server launcher (called by llama-swap)
 │   ├── start-whisper.sh     # STT server launcher (called by llama-swap)
 │   └── whisper_server.py    # OpenAI-compatible Whisper FastAPI server

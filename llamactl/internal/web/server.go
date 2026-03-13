@@ -41,6 +41,9 @@ func New(cfg *config.Config) (*Server, error) {
 	return s, nil
 }
 
+// Handler returns the HTTP handler (useful for testing with httptest).
+func (s *Server) Handler() http.Handler { return s.mux }
+
 // Start listens on 0.0.0.0:<port> and blocks until the process is killed.
 func (s *Server) Start(port string) error {
 	addr := "0.0.0.0:" + port

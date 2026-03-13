@@ -127,8 +127,10 @@
     .sidebar-footer { padding: 8px 8px 14px; border-top: 1px solid var(--border); }
 
     /* ── Main ───────────────────────────────────────────────────────────── */
+    /* On mobile, sidebar is position:fixed so main fills the full width.
+       On desktop, sidebar is position:sticky and occupies its flex column —
+       no extra margin-left needed (that would double the offset). */
     .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    @media (min-width: 768px) { .main { margin-left: var(--sidebar-w); } }
 
     .topbar {
       display: flex; align-items: center; justify-content: space-between;
