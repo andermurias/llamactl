@@ -43,6 +43,8 @@ groups:
       - qwen2.5-14b
       - phi-4
       - qwen2.5-vl-7b
+      - mistral-nemo-12b
+      - mistral-small-3.1-24b
 
 models:
   # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
@@ -182,6 +184,42 @@ models:
       --ctx-size 8192
       --parallel 1
     useModelName: "qwen2.5-vl-7b"
+    ttl: 300
+
+  # ── Web search / RAG · MLX — Mistral Nemo 12B ────────────────────────────
+  # Designed for RAG, web search synthesis and multilingual responses.
+  # Handles long retrieved contexts well; strong instruction following.
+  # Size: ~7 GB (fits comfortably alongside secondary services)
+  # HF repo: mlx-community/Mistral-Nemo-Instruct-2407-4bit
+  #
+  # Open WebUI: ideal model for "Web Search" mode — select it as the active
+  # model and enable the search toggle; it synthesises results cleanly.
+  mistral-nemo-12b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Mistral-Nemo-Instruct-2407-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+      --max-tokens 16384
+    useModelName: "mlx-community/Mistral-Nemo-Instruct-2407-4bit"
+    ttl: 300
+
+  # ── Powerful alternative · MLX — Mistral Small 3.1 24B ───────────────────
+  # Mistral's flagship "small" model (March 2025). Outperforms Gemma 3 12B
+  # on reasoning, coding and multilingual benchmarks.
+  # Size: ~14 GB at 4-bit — loads alone in the swap group (unloads others).
+  # Keep max-tokens moderate to avoid pressure on 16 GB RAM.
+  # HF repo: mlx-community/Mistral-Small-3.1-24B-Instruct-2503-4bit
+  mistral-small-3.1-24b:
+    cmd: |
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/Mistral-Small-3.1-24B-Instruct-2503-4bit
+      --host 127.0.0.1
+      --port ${PORT}
+      --log-level WARNING
+      --max-tokens 8192
+    useModelName: "mlx-community/Mistral-Small-3.1-24B-Instruct-2503-4bit"
     ttl: 300
 
   # ── STT — Whisper large-v3-turbo (OpenAI-compatible transcription) ─────────
