@@ -5,7 +5,7 @@ SCRIPTS_DIR = ../scripts
 VERSION    ?= $(shell git -C .. describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS     = -ldflags "-X github.com/andermurias/llamactl/cmd.Version=$(VERSION) -s -w"
 
-.PHONY: build install clean test test-fast test-web test-api lint dist help
+.PHONY: build install clean test test-fast test-web test-api test-e2e test-inference lint dist help
 
 ## build: compile the binary to ./bin/llamactl (with ad-hoc code signing)
 build:
@@ -40,6 +40,19 @@ test-web:
 test-api:
 	@echo "Running API integration tests (requires llamactl start)..."
 	bash ../scripts/test-api.sh --fast
+
+## test-e2e: run fast E2E tests (health + model listing + llamactl API, no inference, ~5s)
+test-e2e:
+	go test -v -tags e2e -timeout 60s \
+		-run 'TestLlamaSwap_|TestLlamaCtlWeb_|TestModels_|TestLlamaCtlAPI_' \
+		./test/e2e/...
+
+## test-inference: run inference E2E tests — loads ≤14B models sequentially (~3 min)
+## Tip: set LLAMACTL_TEST_LARGE=1 to also include >14B models (may need -timeout 1800s)
+test-inference:
+	go test -v -tags e2e -timeout 600s \
+		-run 'TestInference_' \
+		./test/e2e/...
 
 ## lint: run go vet and staticcheck
 lint:

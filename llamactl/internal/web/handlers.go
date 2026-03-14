@@ -31,6 +31,14 @@ func postOnly(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func getOnly(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return false
+	}
+	return true
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +62,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 // ── Status API ────────────────────────────────────────────────────────────────
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
 	jsonOK(w, map[string]any{
 		"llamaswap": service.GetStatus(s.cfg),
 		"comfyui":   service.GetComfyUIStatus(s.cfg),
@@ -126,6 +137,9 @@ func (s *Server) handleComfyUIStop(w http.ResponseWriter, r *http.Request) {
 // ── Models ────────────────────────────────────────────────────────────────────
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
 	jsonOK(w, service.GetModelsInfo(s.cfg))
 }
 
@@ -134,6 +148,9 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 // handleLogs returns the last N lines of a log file.
 // Query params: service=llamaswap|comfyui (default: llamaswap), lines=N (default: 100)
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
 	svcName := r.URL.Query().Get("service")
 	if svcName == "" {
 		svcName = "llamaswap"

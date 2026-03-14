@@ -7,6 +7,7 @@ package web_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/andermurias/llamactl/internal/config"
+	"github.com/andermurias/llamactl/internal/launchd"
 	"github.com/andermurias/llamactl/internal/web"
 )
 
@@ -37,9 +39,13 @@ func freePort(t *testing.T) string {
 }
 
 // newTestServer creates a web.Server with an isolated temp-dir config.
-// The test config intentionally points PlistPath at a nonexistent file so
-// that llama-swap and ComfyUI always appear "not installed" — launchd is
-// never called.  Log files and the YAML config file are pre-populated.
+//
+// Key isolation properties:
+//   - All file paths (plists, logs, config) point to a unique temp directory.
+//   - The launchd service label is randomised per-test so action handlers that
+//     call service.Start / service.Stop never touch the real running service.
+//   - A t.Cleanup func unloads any launchd service that action handlers may have
+//     bootstrapped during the test, preventing orphaned processes between runs.
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	dir := t.TempDir()
@@ -51,9 +57,13 @@ func newTestServer(t *testing.T) *httptest.Server {
 	cfg.ComfyUILog = filepath.Join(dir, "comfyui.log")
 	cfg.ConfigFile = filepath.Join(dir, "llama-swap.yaml")
 
-	// Plist paths don't exist → service.GetStatus reports IsInstalled=false,
-	// which is safe and avoids any launchd interaction.
-	cfg.PlistPath = filepath.Join(dir, "no-such.plist")
+	// Use a unique, test-scoped service label so action handlers (start/stop)
+	// never interact with the real com.llamastack.llama-swap service.
+	// The label is truncated to stay within launchd limits (~65 chars).
+	cfg.Label = fmt.Sprintf("com.llamastack.llamactl-test.%d", os.Getpid())
+	cfg.PlistPath = filepath.Join(dir, "test-llamaswap.plist")
+	cfg.WebLabel = fmt.Sprintf("com.llamastack.llamactl-webtest.%d", os.Getpid())
+	cfg.WebPlistPath = filepath.Join(dir, "test-web.plist")
 	cfg.ComfyUIPID = filepath.Join(dir, "comfyui.pid")
 
 	// Pre-populate log fixtures.
@@ -66,6 +76,15 @@ func newTestServer(t *testing.T) *httptest.Server {
 	// Use a dynamically allocated free port so the test is not affected by
 	// whatever is running on the developer's machine.
 	cfg.Listen = freePort(t)
+
+	// Clean up any launchd service that action handlers may bootstrap during
+	// this test run.  This prevents orphaned llama-swap processes.
+	t.Cleanup(func() {
+		svc := launchd.LlamaSwapSvc(cfg)
+		if launchd.IsLoaded(svc) {
+			_ = launchd.Bootout(svc)
+		}
+	})
 
 	srv, err := web.New(cfg)
 	if err != nil {
@@ -437,6 +456,8 @@ func TestHandleLogs_MissingLogFile(t *testing.T) {
 	cfg.LogFile = filepath.Join(dir, "does-not-exist.log") // never created
 	cfg.ComfyUILog = filepath.Join(dir, "comfyui.log")
 	cfg.ConfigFile = filepath.Join(dir, "llama-swap.yaml")
+	// Isolated test label so this test never touches the real service.
+	cfg.Label = fmt.Sprintf("com.llamastack.llamactl-test.missing.%d", os.Getpid())
 	cfg.PlistPath = filepath.Join(dir, "noplist")
 	cfg.Listen = freePort(t)
 
