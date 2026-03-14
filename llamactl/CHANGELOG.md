@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v1.3.5] — 2026-03-14
+
+### Added
+- **Comprehensive E2E test suite** in `test/e2e/` (build tag: `e2e`):
+  - `health_test.go` — llama-swap and llamactl-web connectivity checks
+  - `models_list_test.go` — /v1/models count, shape, and completeness (all 13 models)
+  - `llamactl_api_test.go` — /api/status, /api/logs, /api/config, /api/models, method enforcement
+  - `inference_test.go` — chat completion, streaming, embeddings (768-dim), AllModels smoke
+- `make test-e2e` target — fast E2E suite (~5s, no model loading)
+- `make test-inference` target — inference E2E (~3 min, loads models sequentially)
+- `LLAMACTL_TEST_LARGE=1` env guard for >14B models in AllModels smoke test
+
+### Fixed
+- `handleStatus`, `handleModels`, `handleLogs` now return `405 Method Not Allowed`
+  for non-GET requests (previously accepted all HTTP methods and returned `200 OK`)
+- `embeddingResponse` struct: `Object` field had wrong JSON tag `json:"data"` →
+  corrected to `json:"object"`, fixing embedding response parsing
+- `GetStatus()` in `service/llamaswap.go`: added `pgrepFirst()` fallback via
+  `pgrep -x llama-swap` when launchd reports stale state (`pid = 0` after crash)
+- Unit test isolation: `newTestServer()` in `handlers_test.go` uses a unique
+  per-test launchd label (`com.llamastack.llamactl-test.<pid>`) with `t.Cleanup`
+  to prevent orphaned launchd services across test runs
+
+### Documentation
+- Added `.github/copilot-instructions.md` — comprehensive project context for
+  AI assistants and new contributors
+- Updated `llamactl/README.md` — E2E test section, updated running-tests docs
+
+---
+
 ## [v1.3.4] — 2026-03-13
 
 ### Fixed

@@ -128,14 +128,36 @@ make clean    # remove bin/llamactl
 ### Running tests
 
 ```bash
-# Unit tests (no live services required)
-go test ./...
+# Unit tests — no live services required (~35s)
+go test -race ./internal/...
 
-# Integration tests (requires a running llama-swap on :8080)
-bash ../scripts/test-api.sh
-bash ../scripts/test-api.sh --fast          # skip slow LLM tests
-bash ../scripts/test-api.sh --model qwen2.5-3b  # test one model only
+# Fast E2E tests — health + model listing + API checks, no inference (~5s)
+# Requires: llamactl start && llamactl web start
+make test-e2e
+
+# Inference E2E — loads models and calls the API (~3 min)
+make test-inference
+
+# Include large models (>14B) in inference smoke test
+LLAMACTL_TEST_LARGE=1 make test-inference
+
+# Shell integration tests (legacy — bash, requires live llama-swap)
+bash ../scripts/test-api.sh --fast
 ```
+
+#### E2E test layout
+
+```
+test/e2e/                    build tag: //go:build e2e
+├── suite_test.go            HTTP helpers, shared types, TestMain banner
+├── health_test.go           Connectivity: llama-swap /running, llamactl-web /
+├── models_list_test.go      /v1/models — count, shape, all 13 models present
+├── llamactl_api_test.go     /api/status /api/logs /api/config /api/models
+└── inference_test.go        Chat, streaming, embeddings, AllModels smoke
+```
+
+All E2E tests are skipped by default (`go test ./...`). Use the Makefile targets or
+pass `-tags e2e` explicitly.
 
 ### Package layout
 
