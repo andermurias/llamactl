@@ -12,6 +12,7 @@ models/**/*.pth
 # ── Runtime files ─────────────────────────────────────────────────────────────
 logs/*.log
 logs/*.pid
+llamactl-disabled.yaml
 
 # Keep logs directory
 !logs/.gitkeep
