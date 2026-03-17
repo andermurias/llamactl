@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andermurias/llamactl/internal/modelmanager"
 	"github.com/andermurias/llamactl/internal/service"
+	"github.com/andermurias/llamactl/internal/system"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -383,4 +387,406 @@ func (s *Server) handleModelDisabledList(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	jsonOK(w, map[string]any{"disabled": disabled})
+}
+
+// ── System info ───────────────────────────────────────────────────────────────
+
+// handleSystem returns hardware resource information.
+// GET /api/system
+func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	info, err := system.Get()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, info)
+}
+
+// ── Unified action ────────────────────────────────────────────────────────────
+
+// handleAction is a unified POST endpoint for service start/stop/restart.
+// POST /api/action
+// Body: {"action": "start"|"stop"|"restart", "service": "llamaswap"|"comfyui"}
+func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+	var req struct {
+		Action  string `json:"action"`
+		Service string `json:"service"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	switch req.Service {
+	case "llamaswap":
+		switch req.Action {
+		case "start":
+			pid, err := service.Start(s.cfg)
+			if err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]any{"ok": true, "pid": pid})
+		case "stop":
+			if err := service.Stop(s.cfg); err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]bool{"ok": true})
+		case "restart":
+			_ = service.Stop(s.cfg)
+			pid, err := service.Start(s.cfg)
+			if err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]any{"ok": true, "pid": pid})
+		default:
+			jsonErr(w, http.StatusBadRequest, "action must be start|stop|restart")
+		}
+	case "comfyui":
+		switch req.Action {
+		case "start":
+			pid, err := service.StartComfyUI(s.cfg)
+			if err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]any{"ok": true, "pid": pid})
+		case "stop":
+			if err := service.StopComfyUI(s.cfg); err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]bool{"ok": true})
+		case "restart":
+			_ = service.StopComfyUI(s.cfg)
+			pid, err := service.StartComfyUI(s.cfg)
+			if err != nil {
+				jsonErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			jsonOK(w, map[string]any{"ok": true, "pid": pid})
+		default:
+			jsonErr(w, http.StatusBadRequest, "action must be start|stop|restart")
+		}
+	default:
+		jsonErr(w, http.StatusBadRequest, "service must be llamaswap|comfyui")
+	}
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+type analyticsRequest struct {
+	Time     string `json:"time"`
+	Method   string `json:"method"`
+	Path     string `json:"path"`
+	Status   int    `json:"status"`
+	Duration string `json:"duration"`
+}
+
+type analyticsResponse struct {
+	TotalRequests    int                        `json:"total_requests"`
+	InferenceRequests int                       `json:"inference_requests"`
+	Endpoints        map[string]endpointStats   `json:"endpoints"`
+	Recent           []analyticsRequest         `json:"recent"`
+	ErrorRate        float64                    `json:"error_rate"`
+}
+
+type endpointStats struct {
+	Count  int `json:"count"`
+	Errors int `json:"errors"`
+}
+
+var noiseEndpoints = map[string]bool{
+	"/running": true,
+	"/health":  true,
+}
+
+// isInferenceEndpoint returns true for paths that represent actual model inference.
+func isInferenceEndpoint(path string) bool {
+	return strings.HasPrefix(path, "/v1/chat/completions") ||
+		strings.HasPrefix(path, "/v1/embeddings") ||
+		strings.HasPrefix(path, "/v1/audio")
+}
+
+// handleAnalytics parses the llama-swap log and returns request statistics.
+// GET /api/analytics
+func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	logFile := filepath.Join(s.cfg.LogDir, "llama-swap.log")
+	lines, err := tailFile(logFile, 2000)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	endpoints := make(map[string]endpointStats)
+	var recent []analyticsRequest
+	totalRequests := 0
+	inferenceRequests := 0
+	errorCount := 0
+
+	for _, line := range lines {
+		// Format: [INFO] Request 127.0.0.1 "METHOD /path HTTP/1.1" STATUS bytes "UA" duration
+		if !strings.Contains(line, "[INFO] Request") {
+			continue
+		}
+		fields := strings.Fields(line)
+		// fields: [timestamp] [INFO] Request ip "METHOD /path HTTP/version" status bytes "ua" duration
+		// find the quoted method+path
+		if len(fields) < 8 {
+			continue
+		}
+		// Reconstruct: find the quoted segment "METHOD /path HTTP/..."
+		raw := line
+		start := strings.Index(raw, `"`)
+		if start < 0 {
+			continue
+		}
+		end := strings.Index(raw[start+1:], `"`)
+		if end < 0 {
+			continue
+		}
+		requestPart := raw[start+1 : start+1+end]
+		rFields := strings.Fields(requestPart)
+		if len(rFields) < 2 {
+			continue
+		}
+		method := rFields[0]
+		path := rFields[1]
+
+		if noiseEndpoints[path] {
+			continue
+		}
+
+		// Find status code — first integer after the closing quote
+		after := raw[start+1+end+1:]
+		afterFields := strings.Fields(after)
+		if len(afterFields) < 1 {
+			continue
+		}
+		status, parseErr := strconv.Atoi(afterFields[0])
+		if parseErr != nil {
+			continue
+		}
+
+		// Duration is the last field
+		duration := ""
+		if len(afterFields) >= 3 {
+			duration = afterFields[len(afterFields)-1]
+		}
+
+		// Timestamp: first field
+		ts := fields[0]
+
+		totalRequests++
+		if status >= 400 {
+			errorCount++
+		}
+		if isInferenceEndpoint(path) {
+			inferenceRequests++
+		}
+
+		key := method + " " + path
+		st := endpoints[key]
+		st.Count++
+		if status >= 400 {
+			st.Errors++
+		}
+		endpoints[key] = st
+
+		if len(recent) < 20 {
+			recent = append(recent, analyticsRequest{
+				Time:     ts,
+				Method:   method,
+				Path:     path,
+				Status:   status,
+				Duration: duration,
+			})
+		}
+	}
+
+	// Reverse recent so newest is first
+	for i, j := 0, len(recent)-1; i < j; i, j = i+1, j-1 {
+		recent[i], recent[j] = recent[j], recent[i]
+	}
+
+	errorRate := 0.0
+	if totalRequests > 0 {
+		errorRate = float64(errorCount) / float64(totalRequests)
+	}
+
+	jsonOK(w, analyticsResponse{
+		TotalRequests:    totalRequests,
+		InferenceRequests: inferenceRequests,
+		Endpoints:        endpoints,
+		Recent:           recent,
+		ErrorRate:        errorRate,
+	})
+}
+
+// ── Config presets ────────────────────────────────────────────────────────────
+
+var presetNameRe = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func (s *Server) presetsDir() string {
+	return filepath.Join(filepath.Dir(s.cfg.ConfigFile), "llamactl-presets")
+}
+
+type presetMeta struct {
+	Name    string `json:"name"`
+	SavedAt string `json:"saved_at,omitempty"`
+}
+
+// handlePresets lists saved config presets.
+// GET /api/presets
+func (s *Server) handlePresets(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	dir := s.presetsDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			jsonOK(w, map[string]any{"presets": []presetMeta{}})
+			return
+		}
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var presets []presetMeta
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".yaml")
+		info, _ := e.Info()
+		savedAt := ""
+		if info != nil {
+			savedAt = info.ModTime().Format(time.DateTime)
+		}
+		presets = append(presets, presetMeta{Name: name, SavedAt: savedAt})
+	}
+	if presets == nil {
+		presets = []presetMeta{}
+	}
+	jsonOK(w, map[string]any{"presets": presets})
+}
+
+// handlePresetsSave saves the current config as a named preset.
+// POST /api/presets/save   Body: {"name": "my-preset"}
+func (s *Server) handlePresetsSave(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if !presetNameRe.MatchString(req.Name) {
+		jsonErr(w, http.StatusBadRequest, "name must match [a-zA-Z0-9_-]")
+		return
+	}
+
+	content, err := os.ReadFile(s.cfg.ConfigFile)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "read config: "+err.Error())
+		return
+	}
+
+	dir := s.presetsDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "mkdir: "+err.Error())
+		return
+	}
+	dest := filepath.Join(dir, req.Name+".yaml")
+	if err := os.WriteFile(dest, content, 0o644); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "write preset: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true, "name": req.Name})
+}
+
+// handlePresetsApply copies a preset over the current config and restarts llama-swap.
+// POST /api/presets/apply   Body: {"name": "my-preset"}
+func (s *Server) handlePresetsApply(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if !presetNameRe.MatchString(req.Name) {
+		jsonErr(w, http.StatusBadRequest, "name must match [a-zA-Z0-9_-]")
+		return
+	}
+
+	src := filepath.Join(s.presetsDir(), req.Name+".yaml")
+	content, err := os.ReadFile(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			jsonErr(w, http.StatusNotFound, "preset not found: "+req.Name)
+			return
+		}
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := os.WriteFile(s.cfg.ConfigFile, content, 0o644); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "write config: "+err.Error())
+		return
+	}
+
+	// Restart llama-swap to pick up the new config
+	_ = service.Stop(s.cfg)
+	pid, err := service.Start(s.cfg)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "restart failed: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true, "name": req.Name, "pid": pid})
+}
+
+// handlePresetsDelete deletes a named preset file.
+// POST /api/presets/delete   Body: {"name": "my-preset"}
+func (s *Server) handlePresetsDelete(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if !presetNameRe.MatchString(req.Name) {
+		jsonErr(w, http.StatusBadRequest, "name must match [a-zA-Z0-9_-]")
+		return
+	}
+
+	path := filepath.Join(s.presetsDir(), req.Name+".yaml")
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			jsonErr(w, http.StatusNotFound, "preset not found: "+req.Name)
+			return
+		}
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, map[string]bool{"ok": true})
 }

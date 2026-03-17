@@ -80,4 +80,15 @@ func (s *Server) routes() {
 	// ── API: HuggingFace discovery ────────────────────────────────────────
 	s.mux.HandleFunc("/api/hf/search", s.handleHFSearch)
 	s.mux.HandleFunc("/api/hf/info", s.handleHFInfo)
+
+	// ── API: system info, unified action, analytics ───────────────────────
+	s.mux.HandleFunc("/api/system", s.handleSystem)
+	s.mux.HandleFunc("/api/action", s.handleAction)
+	s.mux.HandleFunc("/api/analytics", s.handleAnalytics)
+
+	// ── API: config presets ───────────────────────────────────────────────
+	s.mux.HandleFunc("/api/presets", s.handlePresets)
+	s.mux.HandleFunc("/api/presets/save", s.handlePresetsSave)
+	s.mux.HandleFunc("/api/presets/apply", s.handlePresetsApply)
+	s.mux.HandleFunc("/api/presets/delete", s.handlePresetsDelete)
 }

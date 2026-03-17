@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -47,6 +49,9 @@ func SearchModels(query, modelType string, limit int) ([]HFModel, error) {
 	var models []HFModel
 	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
 		return nil, fmt.Errorf("parse HF response: %w", err)
+	}
+	for i := range models {
+		models[i].EstRAMGB = EstimateRAMGB(models[i])
 	}
 	return models, nil
 }
@@ -163,6 +168,31 @@ func FindGGUFRepo(hfID, preferredQuant string) (string, []HFFile, error) {
 	}
 
 	return "", nil, nil
+}
+
+// ── RAM estimation ────────────────────────────────────────────────────────────
+
+var billionsRe = regexp.MustCompile(`(?i)(\d+(?:\.\d+)?)b`)
+
+// EstimateRAMGB returns a rough estimate of the RAM required to run a model
+// with Q4-like quantization. Returns 0 if unknown.
+//
+//  1. If SafeTensors.Total > 0: params * 0.6 / 1e9  (roughly Q4 bytes per param)
+//  2. Otherwise: parse "7b", "12b", "3.5b" from the model ID and multiply by 0.6
+func EstimateRAMGB(m HFModel) float64 {
+	if m.SafeTensors != nil && m.SafeTensors.Total > 0 {
+		return float64(m.SafeTensors.Total) * 0.6 / 1e9
+	}
+	// Fall back to name-based heuristic
+	match := billionsRe.FindStringSubmatch(m.ID)
+	if len(match) < 2 {
+		return 0
+	}
+	b, err := strconv.ParseFloat(match[1], 64)
+	if err != nil {
+		return 0
+	}
+	return b * 0.6
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

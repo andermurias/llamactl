@@ -12,14 +12,22 @@ package modelmanager
 
 // ── HuggingFace API types ─────────────────────────────────────────────────────
 
+// SafeTensors holds parameter counts reported by HuggingFace model metadata.
+type SafeTensors struct {
+	Parameters map[string]int64 `json:"parameters,omitempty"`
+	Total      int64            `json:"total"`
+}
+
 // HFModel represents a model returned by the HuggingFace search/info API.
 type HFModel struct {
-	ID          string   `json:"modelId"`
-	Downloads   int      `json:"downloads"`
-	Likes       int      `json:"likes"`
-	Tags        []string `json:"tags"`
-	PipelineTag string   `json:"pipeline_tag"`
-	Siblings    []HFFile `json:"siblings,omitempty"`
+	ID          string       `json:"modelId"`
+	Downloads   int          `json:"downloads"`
+	Likes       int          `json:"likes"`
+	Tags        []string     `json:"tags"`
+	PipelineTag string       `json:"pipeline_tag"`
+	Siblings    []HFFile     `json:"siblings,omitempty"`
+	SafeTensors *SafeTensors `json:"safetensors,omitempty"`
+	EstRAMGB    float64      `json:"est_ram_gb,omitempty"` // set after fetch, not from JSON
 }
 
 // HFFile is one file in a HuggingFace model repository.

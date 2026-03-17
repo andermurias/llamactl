@@ -474,6 +474,18 @@
         </svg>
         Logs
       </button>
+      <button class="nav-item" id="nav-analytics" onclick="showSection('analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Analytics
+      </button>
+      <button class="nav-item" id="nav-system" onclick="showSection('system')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        System
+      </button>
       <button class="nav-item" id="nav-config" onclick="showSection('config')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -778,6 +790,13 @@
               <option value="mlx">MLX</option>
               <option value="gguf">GGUF</option>
             </select>
+            <select id="hf-max-ram" style="padding:9px 12px; background:var(--bg-2); border:1px solid var(--border); border-radius:8px; color:var(--text-1); font-size:13px">
+              <option value="0">Any size</option>
+              <option value="2">≤ 2 GB</option>
+              <option value="4">≤ 4 GB</option>
+              <option value="8">≤ 8 GB</option>
+              <option value="16">≤ 16 GB</option>
+            </select>
             <button class="btn btn-primary" onclick="doHFSearch()">Search</button>
           </div>
           <p id="hf-search-hint" style="font-size:12px; color:var(--text-3); margin-top:10px; margin-bottom:0">
@@ -794,6 +813,7 @@
               <thead><tr>
                 <th>Model ID</th>
                 <th>Downloads</th>
+                <th>~RAM</th>
                 <th>Pipeline</th>
                 <th style="text-align:right">Action</th>
               </tr></thead>
@@ -833,6 +853,42 @@
           <div class="log-box" id="log-box">Select a service to view logs.</div>
         </div>
       </div><!-- /sec-logs -->
+
+      <!-- ════════════════════════════════════════════════════════════════
+           ANALYTICS
+      ═══════════════════════════════════════════════════════════════════ -->
+      <div id="sec-analytics" class="section">
+        <h1 class="section-title">Analytics</h1>
+        <p class="section-sub">API request traffic from llama-swap logs.</p>
+        <div id="analytics-content">
+          <div style="color:var(--text-3); font-size:13px">Loading…</div>
+        </div>
+      </div><!-- /sec-analytics -->
+
+      <!-- ════════════════════════════════════════════════════════════════
+           SYSTEM
+      ═══════════════════════════════════════════════════════════════════ -->
+      <div id="sec-system" class="section">
+        <h1 class="section-title">System</h1>
+        <p class="section-sub">Hardware resources and memory usage.</p>
+
+        <div class="card" style="padding:20px">
+          <div style="font-size:13px; font-weight:600; margin-bottom:12px">Memory</div>
+          <div id="sys-ram-bars" style="display:flex; flex-direction:column; gap:8px">
+            Loading…
+          </div>
+        </div>
+
+        <div class="card" style="padding:20px; margin-top:10px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+            <span style="font-size:13px; font-weight:600">Config Presets</span>
+            <button class="btn btn-sm btn-primary" onclick="savePreset()">Save current</button>
+          </div>
+          <div id="presets-list" style="display:flex; flex-direction:column; gap:6px">
+            <span style="font-size:12px; color:var(--text-3)">No presets saved yet.</span>
+          </div>
+        </div>
+      </div><!-- /sec-system -->
 
       <!-- ════════════════════════════════════════════════════════════════
            CONFIG
@@ -890,7 +946,7 @@ function closeSidebar() {
 }
 
 // ── Section navigation ─────────────────────────────────────────────────────
-const SECTIONS = ['services', 'models', 'logs', 'config', 'discover'];
+const SECTIONS = ['services', 'models', 'logs', 'config', 'discover', 'analytics', 'system'];
 let activeSection = 'services';
 
 function showSection(name) {
@@ -1225,6 +1281,8 @@ var _origShowSection = showSection;
 showSection = function(name) {
   _origShowSection(name);
   if (name === 'models') loadDisabledModels();
+  if (name === 'analytics') loadAnalytics();
+  if (name === 'system') loadSystemInfo();
 };
 
 // ── Quick Test panel ─────────────────────────────────────────────────────────
@@ -1288,13 +1346,14 @@ function doHFSearch() {
   var q = document.getElementById('hf-search-input').value.trim();
   if (!q) return;
   var type = document.getElementById('hf-search-type').value;
+  var maxRam = parseFloat(document.getElementById('hf-max-ram').value) || 0;
   var card = document.getElementById('hf-results-card');
   var header = document.getElementById('hf-results-header');
   var tbody = document.getElementById('hf-results-body');
 
   header.textContent = 'Searching…';
   card.style.display = '';
-  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; color:var(--text-3)">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; color:var(--text-3)">Loading…</td></tr>';
 
   var url = '/api/hf/search?q=' + encodeURIComponent(q) + (type ? '&type=' + type : '') + '&limit=20';
   fetch(url)
@@ -1302,13 +1361,19 @@ function doHFSearch() {
     .then(function(data) {
       if (data.error) {
         header.textContent = 'Error';
-        tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; color:var(--red)">' + data.error + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:16px; color:var(--red)">' + data.error + '</td></tr>';
         return;
       }
       var results = data.results || [];
+      // client-side RAM filter
+      if (maxRam > 0) {
+        results = results.filter(function(m) {
+          return m.est_ram_gb <= 0 || m.est_ram_gb <= maxRam;
+        });
+      }
       header.textContent = results.length + ' results for "' + q + '"';
       if (results.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; color:var(--text-3)">No results found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; color:var(--text-3)">No results found.</td></tr>';
         return;
       }
       tbody.innerHTML = results.map(function(m) {
@@ -1316,6 +1381,7 @@ function doHFSearch() {
         return '<tr>' +
           '<td class="mono-text" style="font-size:12px">' + m.modelId + '</td>' +
           '<td style="color:var(--text-3);font-size:12px">' + dl + '</td>' +
+          '<td style="font-size:12px">' + ramFitBadge(m.est_ram_gb || 0) + '</td>' +
           '<td style="color:var(--text-3);font-size:12px">' + (m.pipeline_tag || '') + '</td>' +
           '<td style="text-align:right">' +
             '<button class="btn btn-sm btn-primary" onclick="installModel(\'' + m.modelId + '\')">Install</button>' +
@@ -1325,8 +1391,16 @@ function doHFSearch() {
     })
     .catch(function(e) {
       header.textContent = 'Error';
-      tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; color:var(--red)">' + e.message + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:16px; color:var(--red)">' + e.message + '</td></tr>';
     });
+}
+
+function ramFitBadge(estGB) {
+  var sys = window._sysInfo;
+  if (!sys || estGB <= 0) return '<span style="color:var(--text-3)">—</span>';
+  var avail75 = sys.mem_75pct / 1e9;
+  var icon = estGB <= avail75 * 0.8 ? '🟢' : estGB <= avail75 ? '🟡' : '🔴';
+  return icon + ' ' + estGB.toFixed(1) + ' GB';
 }
 
 function installModel(hfID) {
@@ -1401,6 +1475,151 @@ function installModel(hfID) {
     log.textContent += '\nError: ' + e.message;
   });
 }
+
+// ── System section ────────────────────────────────────────────────────────────
+
+function loadSystemInfo() {
+  fetch('/api/system').then(function(r) { return r.json(); }).then(function(info) {
+    window._sysInfo = info;
+    var bars = document.getElementById('sys-ram-bars');
+    if (!bars) return;
+    var total = info.mem_total;
+    var used = info.mem_used;
+    var avail = info.mem_available;
+    function gb(b) { return (b / 1e9).toFixed(1); }
+    function pct(part, whole) { return whole ? Math.min(100, Math.round(part / whole * 100)) : 0; }
+    bars.innerHTML =
+      '<div style="font-size:12px; color:var(--text-3); margin-bottom:2px">Total: ' + gb(total) + ' GB unified · ' + info.cpu_cores + ' cores</div>' +
+      '<div style="font-size:12px; color:var(--text-2); margin-bottom:6px">Available: ' + gb(avail) + ' GB &nbsp;·&nbsp; Used: ' + gb(used) + ' GB</div>' +
+      '<div style="position:relative; height:24px; background:var(--surface2); border-radius:8px; overflow:hidden">' +
+        '<div style="height:100%; width:' + pct(used, total) + '%; background:linear-gradient(90deg, var(--blue), #5ac8fa); border-radius:8px; transition:width .4s"></div>' +
+        '<div style="position:absolute; top:50%; right:8px; transform:translateY(-50%); font-size:11px; color:var(--text-3)">' + pct(used, total) + '% used</div>' +
+      '</div>' +
+      '<div style="font-size:11.5px; color:var(--text-3); margin-top:6px">Recommended model budget (75%): <strong style="color:var(--text-2)">' + gb(info.mem_75pct) + ' GB</strong></div>';
+    loadPresets();
+  }).catch(function(e) {
+    var bars = document.getElementById('sys-ram-bars');
+    if (bars) bars.innerHTML = '<span style="color:var(--red);font-size:12px">Error: ' + e.message + '</span>';
+  });
+}
+
+function loadPresets() {
+  fetch('/api/presets').then(function(r) { return r.json(); }).then(function(data) {
+    var list = document.getElementById('presets-list');
+    if (!list) return;
+    var presets = data.presets || [];
+    if (presets.length === 0) {
+      list.innerHTML = '<span style="font-size:12px; color:var(--text-3)">No presets saved yet.</span>';
+      return;
+    }
+    list.innerHTML = presets.map(function(p) {
+      return '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--surface2); border-radius:8px">' +
+        '<span style="flex:1; font-size:13px">' + p.name + '</span>' +
+        '<span style="font-size:11px; color:var(--text-3)">' + (p.saved_at || '') + '</span>' +
+        '<button class="btn btn-sm btn-default" onclick="applyPreset(\'' + p.name + '\')">Apply</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deletePreset(\'' + p.name + '\')">&#x2715;</button>' +
+      '</div>';
+    }).join('');
+  });
+}
+
+function savePreset() {
+  var name = prompt('Preset name (letters, numbers, hyphens only):');
+  if (!name) return;
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) { showToast('Invalid name', 'error', 'Use only letters, numbers, hyphens.'); return; }
+  fetch('/api/presets/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: name})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { showToast('Error', 'error', d.error); return; }
+    showToast('Preset saved', 'success', '"' + name + '"');
+    loadPresets();
+  });
+}
+
+function applyPreset(name) {
+  showModal({
+    title: 'Apply preset',
+    body: 'Apply preset "' + name + '"? This will overwrite the current config and restart llama-swap.',
+    actions: [
+      {label: 'Cancel', cls: 'btn-default'},
+      {label: 'Apply & Restart', cls: 'btn-primary', fn: function() {
+        fetch('/api/presets/apply', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name: name})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d.error) { showToast('Error', 'error', d.error); return; }
+          showToast('Preset applied', 'success', 'llama-swap restarting\u2026');
+          setTimeout(function() {
+            htmx.ajax('GET', '/', {target: 'body', swap: 'outerHTML'}).then(function() { showSection('system'); });
+          }, 3500);
+        });
+      }}
+    ]
+  });
+}
+
+function deletePreset(name) {
+  showModal({
+    title: 'Delete preset',
+    body: 'Delete preset "' + name + '"?',
+    actions: [
+      {label: 'Cancel', cls: 'btn-default'},
+      {label: 'Delete', cls: 'btn-danger', fn: function() {
+        fetch('/api/presets/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name: name})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          if (d.error) { showToast('Error', 'error', d.error); return; }
+          showToast('Deleted', 'success');
+          loadPresets();
+        });
+      }}
+    ]
+  });
+}
+
+// ── Analytics section ─────────────────────────────────────────────────────────
+
+function loadAnalytics() {
+  var content = document.getElementById('analytics-content');
+  if (!content) return;
+  content.innerHTML = '<div style="color:var(--text-3);font-size:13px">Loading\u2026</div>';
+  fetch('/api/analytics').then(function(r) { return r.json(); }).then(function(d) {
+    if (d.error) { content.innerHTML = '<span style="color:var(--red)">' + d.error + '</span>'; return; }
+    var recent = (d.recent || []).map(function(req) {
+      var statusCls = req.status >= 400 ? 'var(--red)' : req.status >= 300 ? 'var(--yellow)' : 'var(--green)';
+      return '<tr>' +
+        '<td style="font-family:monospace;font-size:11.5px;color:var(--text-3)">' + (req.time || '') + '</td>' +
+        '<td style="font-family:monospace;font-size:12px">' + req.method + ' ' + req.path + '</td>' +
+        '<td style="color:' + statusCls + ';font-size:12px">' + req.status + '</td>' +
+        '<td style="color:var(--text-3);font-size:11.5px">' + (req.duration || '') + '</td>' +
+        '</tr>';
+    }).join('');
+    content.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px">' +
+        statCard('Total requests', d.total_requests) +
+        statCard('Inference', d.inference_requests) +
+        statCard('Error rate', (d.error_rate * 100).toFixed(1) + '%') +
+      '</div>' +
+      (recent ? '<div class="card" style="padding:0;overflow:hidden"><div style="padding:12px 18px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600">Recent API calls</div><div class="table-wrap"><table><thead><tr><th>Time</th><th>Request</th><th>Status</th><th>Duration</th></tr></thead><tbody>' + recent + '</tbody></table></div></div>' : '');
+  }).catch(function(e) {
+    content.innerHTML = '<span style="color:var(--red)">' + e.message + '</span>';
+  });
+}
+
+function statCard(label, val) {
+  return '<div class="card" style="padding:16px;text-align:center">' +
+    '<div style="font-size:22px;font-weight:700;color:var(--text)">' + val + '</div>' +
+    '<div style="font-size:11.5px;color:var(--text-3);margin-top:2px">' + label + '</div>' +
+    '</div>';
+}
+
+// Load system info at startup for HF search RAM fitting
+fetch('/api/system').then(function(r) { return r.json(); }).then(function(d) { window._sysInfo = d; }).catch(function() {});
 </script>
 </body>
 </html>
