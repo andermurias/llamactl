@@ -182,7 +182,9 @@ var requiredPackages = []setupPackage{
 // These are cloned into custom_nodes/ during setup.
 var standardExtensions = []setupExtension{
 	{"ComfyUI-Manager", "https://github.com/ltdrdata/ComfyUI-Manager", "Plugin manager — install/update nodes from UI"},
+	{"ComfyUI-Easy-Use", "https://github.com/yolain/ComfyUI-Easy-Use", "Simplified all-in-one nodes for quick workflows"},
 	{"ComfyUI-Impact-Pack", "https://github.com/ltdrdata/ComfyUI-Impact-Pack", "Detection, segmentation, face detailer"},
+	{"ComfyUI-Inspire-Pack", "https://github.com/ltdrdata/ComfyUI-Inspire-Pack", "Prompt helpers, wildcards, style mixing"},
 	{"was-node-suite-comfyui", "https://github.com/WASasquatch/was-node-suite-comfyui", "220+ utility nodes (images, text, logic)"},
 	{"ComfyUI_IPAdapter_plus", "https://github.com/cubiq/ComfyUI_IPAdapter_plus", "IP-Adapter image conditioning"},
 	{"ComfyUI-Advanced-ControlNet", "https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet", "Advanced ControlNet with batching"},
@@ -193,6 +195,7 @@ var standardExtensions = []setupExtension{
 	{"ComfyUI-Custom-Scripts", "https://github.com/pythongosssss/ComfyUI-Custom-Scripts", "UI enhancements (image feed, wildcards, etc.)"},
 	{"efficiency-nodes-comfyui", "https://github.com/jags111/efficiency-nodes-comfyui", "Efficient loaders and workflow helpers"},
 	{"ComfyUI-KJNodes", "https://github.com/kijai/ComfyUI-KJNodes", "KJ utility nodes for Flux/video/masks"},
+	{"comfyui-portrait-master", "https://github.com/florestefano1975/comfyui-portrait-master", "Portrait lighting, style, and composition controls"},
 }
 
 // newSetupCmd returns the "llamactl comfyui setup" command.
