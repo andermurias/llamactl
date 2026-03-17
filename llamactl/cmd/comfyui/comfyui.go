@@ -25,6 +25,7 @@ cmd.AddCommand(
 		newStatusCmd(cfg),
 		newLogsCmd(cfg),
 		newModelsCmd(cfg),
+		newSetupCmd(cfg),
 	)
 return cmd
 }
@@ -148,4 +149,95 @@ return c.Run()
 cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output")
 cmd.Flags().IntVarP(&lines, "lines", "n", 100, "Number of lines")
 return cmd
+}
+
+// setupPackage describes a pip package required by ComfyUI or its extensions.
+type setupPackage struct {
+pkg     string // pip package name
+testMod string // Python module to import to verify installation
+desc    string // human-readable description
+}
+
+// requiredPackages lists pip packages that must be installed for a healthy
+// ComfyUI environment on Apple Silicon.
+var requiredPackages = []setupPackage{
+{"comfyui-manager", "comfyui_manager", "ComfyUI Manager (plugin manager UI)"},
+{"opencv-python-headless", "cv2", "OpenCV (image processing, required by NudeNet and other nodes)"},
+{"onnxruntime", "onnxruntime", "ONNX Runtime (required by NudeNet and AI upscaling nodes)"},
+}
+
+// newSetupCmd returns the "llamactl comfyui setup" command.
+// It installs all required Python dependencies into the ComfyUI venv so that
+// common custom nodes load correctly.
+func newSetupCmd(cfg *config.Config) *cobra.Command {
+return &cobra.Command{
+Use:   "setup",
+Short: "Install required Python dependencies for ComfyUI and common plugins",
+Long: `Installs pip packages into the ComfyUI virtual environment that are
+required by ComfyUI-Manager and common custom nodes (NudeNet, upscalers, etc.).
+Safe to run multiple times — already-installed packages are skipped.`,
+RunE: func(cmd *cobra.Command, args []string) error {
+python := cfg.ComfyUIPython
+if _, err := os.Stat(python); err != nil {
+return fmt.Errorf("ComfyUI venv not found at %s — install ComfyUI first", python)
+}
+
+pterm.DefaultSection.WithLevel(2).Println("ComfyUI dependency setup")
+
+allOK := true
+for _, p := range requiredPackages {
+// Check if already installed
+checkCmd := exec.Command(python, "-c", fmt.Sprintf(
+"import subprocess, sys; subprocess.run([sys.executable, '-c', 'import %s'], check=True)", p.testMod))
+if checkCmd.Run() == nil {
+pterm.Success.Printf("%-35s already installed\n", p.pkg)
+continue
+}
+
+spinner, _ := pterm.DefaultSpinner.WithText(
+fmt.Sprintf("Installing %s — %s", p.pkg, p.desc)).Start()
+installCmd := exec.Command(python, "-m", "pip", "install", "--quiet", p.pkg)
+installCmd.Dir = cfg.ComfyUIDir
+out, err := installCmd.CombinedOutput()
+if err != nil {
+spinner.Fail(fmt.Sprintf("FAILED: %s\n%s", p.pkg, string(out)))
+allOK = false
+continue
+}
+spinner.Success(fmt.Sprintf("Installed %s", p.pkg))
+}
+
+// Also install any requirements.txt found in custom nodes
+entries, _ := os.ReadDir(cfg.ComfyUIDir + "/custom_nodes")
+for _, e := range entries {
+if !e.IsDir() {
+continue
+}
+reqFile := cfg.ComfyUIDir + "/custom_nodes/" + e.Name() + "/requirements.txt"
+if _, err := os.Stat(reqFile); err != nil {
+continue
+}
+spinner, _ := pterm.DefaultSpinner.WithText(
+fmt.Sprintf("Installing deps for %s…", e.Name())).Start()
+installCmd := exec.Command(python, "-m", "pip", "install",
+"--quiet", "-r", reqFile)
+out, err := installCmd.CombinedOutput()
+if err != nil {
+spinner.Fail(fmt.Sprintf("FAILED for %s: %s", e.Name(), string(out)))
+allOK = false
+} else {
+spinner.Success(fmt.Sprintf("Deps OK: %s", e.Name()))
+}
+}
+
+fmt.Println()
+if allOK {
+pterm.Success.Println("All dependencies installed. Restart ComfyUI:")
+pterm.Info.Println("  llamactl comfyui restart")
+} else {
+pterm.Warning.Println("Some packages failed — check output above and retry.")
+}
+return nil
+},
+}
 }
