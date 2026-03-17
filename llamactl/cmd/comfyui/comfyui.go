@@ -21,6 +21,7 @@ Short: "Manage ComfyUI image generation server",
 cmd.AddCommand(
 		newStartCmd(cfg),
 		newStopCmd(cfg),
+		newRestartCmd(cfg),
 		newStatusCmd(cfg),
 		newLogsCmd(cfg),
 		newModelsCmd(cfg),
@@ -53,25 +54,54 @@ return nil
 }
 }
 
+func newRestartCmd(cfg *config.Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart",
+		Short: "Restart ComfyUI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cs := service.GetComfyUIStatus(cfg)
+			if cs.IsRunning {
+				spinner, _ := pterm.DefaultSpinner.WithText("Stopping ComfyUI…").Start()
+				if err := service.StopComfyUI(cfg); err != nil {
+					spinner.Fail(err.Error())
+					return err
+				}
+				spinner.Success("ComfyUI stopped")
+			}
+			spinner, _ := pterm.DefaultSpinner.WithText("Starting ComfyUI (waiting up to 60 s)…").Start()
+			pid, err := service.StartComfyUI(cfg)
+			if err != nil {
+				spinner.Fail(err.Error())
+				return err
+			}
+			cs2 := service.GetComfyUIStatus(cfg)
+			spinner.Success(fmt.Sprintf("ComfyUI restarted  (PID %d)", pid))
+			pterm.Info.Printf("URL: %s\n", cs2.URL)
+			return nil
+		},
+	}
+}
+
+
 func newStopCmd(cfg *config.Config) *cobra.Command {
-return &cobra.Command{
-Use:   "stop",
-Short: "Stop ComfyUI",
-RunE: func(cmd *cobra.Command, args []string) error {
-cs := service.GetComfyUIStatus(cfg)
-if !cs.IsRunning {
-pterm.Warning.Println("ComfyUI is not running")
-return nil
-}
-spinner, _ := pterm.DefaultSpinner.WithText("Stopping ComfyUI…").Start()
-if err := service.StopComfyUI(cfg); err != nil {
-spinner.Fail(err.Error())
-return err
-}
-spinner.Success("ComfyUI stopped")
-return nil
-},
-}
+	return &cobra.Command{
+		Use:   "stop",
+		Short: "Stop ComfyUI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cs := service.GetComfyUIStatus(cfg)
+			if !cs.IsRunning {
+				pterm.Warning.Println("ComfyUI is not running")
+				return nil
+			}
+			spinner, _ := pterm.DefaultSpinner.WithText("Stopping ComfyUI…").Start()
+			if err := service.StopComfyUI(cfg); err != nil {
+				spinner.Fail(err.Error())
+				return err
+			}
+			spinner.Success("ComfyUI stopped")
+			return nil
+		},
+	}
 }
 
 func newStatusCmd(cfg *config.Config) *cobra.Command {
