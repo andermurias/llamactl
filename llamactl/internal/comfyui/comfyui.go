@@ -54,6 +54,7 @@ func Start(cfg *config.Config) (int, error) {
 		cfg.ComfyUIDir+"/main.py",
 		"--listen", "0.0.0.0",
 		"--port", cfg.ComfyUIPort,
+		"--enable-manager", // required by ComfyUI-Manager extension
 	)
 	cmd.Dir = cfg.ComfyUIDir
 	cmd.Stdout = logFile
