@@ -83,6 +83,41 @@ URL:    "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae
 SubDir: "vae",
 File:   "flux_ae.safetensors",
 },
+// ── IP-Adapter (style/face conditioning) ──────────────────────────────────
+{
+Name:   "IP-Adapter SDXL (base)",
+Short:  "Apply style from reference image to SDXL generations",
+Size:   "~694 MB",
+URL:    "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter_sdxl.safetensors",
+SubDir: "ipadapter",
+File:   "ip-adapter_sdxl.safetensors",
+},
+{
+Name:   "IP-Adapter Plus Face SDXL (vit-h)",
+Short:  "Transfer face/character from photo to SDXL — use with CLIP-ViT-H-14",
+Size:   "~694 MB",
+URL:    "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors",
+SubDir: "ipadapter",
+File:   "ip-adapter-plus-face_sdxl_vit-h.safetensors",
+},
+// ── CLIP Vision (required for IP-Adapter) ─────────────────────────────────
+{
+Name:   "CLIP ViT-H-14 (vision encoder for IP-Adapter)",
+Short:  "Required by IP-Adapter vit-h models — laion2B 2B-s32B-b79K",
+Size:   "~3.7 GB",
+URL:    "https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/resolve/main/open_clip_model.safetensors",
+SubDir: "clip_vision",
+File:   "CLIP-ViT-H-14.safetensors",
+},
+// ── Upscale models ────────────────────────────────────────────────────────
+{
+Name:   "RealESRGAN x4 (upscaler)",
+Short:  "4x AI upscaler — works on any image, fast on Apple Silicon",
+Size:   "~64 MB",
+URL:    "https://huggingface.co/ai-forever/Real-ESRGAN/resolve/main/RealESRGAN_x4.pth",
+SubDir: "upscale_models",
+File:   "RealESRGAN_x4.pth",
+},
 }
 
 func newModelsCmd(cfg *config.Config) *cobra.Command {
