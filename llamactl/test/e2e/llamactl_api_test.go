@@ -156,6 +156,44 @@ func TestLlamaCtlAPI_Models(t *testing.T) {
 		len(resp.APIModels), len(resp.GGUFFiles), len(resp.HFModels))
 }
 
+// TestLlamaCtlAPI_HFSearch verifies /api/hf/search returns results for a known query.
+func TestLlamaCtlAPI_HFSearch(t *testing.T) {
+	skipIfUnavailable(t, llamaCtlAddr())
+	code, body := get(t, llamaCtlAddr()+"/api/hf/search?q=phi")
+	if code != http.StatusOK {
+		t.Fatalf("/api/hf/search: expected 200, got %d\nbody: %s", code, body)
+	}
+	var resp struct {
+		Results []struct {
+			ID       string `json:"id"`
+			Downloads int   `json:"downloads"`
+		} `json:"results"`
+	}
+	mustParseJSON(t, body, &resp)
+	if len(resp.Results) == 0 {
+		t.Error("/api/hf/search: expected at least one result for 'phi'")
+	}
+	t.Logf("✓ /api/hf/search returned %d results", len(resp.Results))
+}
+
+// TestLlamaCtlAPI_ModelDisabledList verifies /api/models/disabled returns a valid response.
+func TestLlamaCtlAPI_ModelDisabledList(t *testing.T) {
+	skipIfUnavailable(t, llamaCtlAddr())
+	code, body := get(t, llamaCtlAddr()+"/api/models/disabled")
+	if code != http.StatusOK {
+		t.Fatalf("/api/models/disabled: expected 200, got %d", code)
+	}
+	var resp struct {
+		Disabled map[string]interface{} `json:"disabled"`
+	}
+	mustParseJSON(t, body, &resp)
+	// disabled may be empty map ({}), which is valid
+	if resp.Disabled == nil {
+		t.Error("/api/models/disabled: 'disabled' field is null")
+	}
+	t.Logf("✓ /api/models/disabled: %d disabled models", len(resp.Disabled))
+}
+
 // TestLlamaCtlAPI_InvalidMethod verifies unsupported methods return 4xx.
 func TestLlamaCtlAPI_InvalidMethod(t *testing.T) {
 	skipIfUnavailable(t, llamaCtlAddr())

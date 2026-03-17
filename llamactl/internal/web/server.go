@@ -71,6 +71,13 @@ func (s *Server) routes() {
 
 	// ── API: models + logs + config ───────────────────────────────────────
 	s.mux.HandleFunc("/api/models", s.handleModels)
+	s.mux.HandleFunc("/api/models/disabled", s.handleModelDisabledList)
+	s.mux.HandleFunc("/api/models/install", s.handleModelInstall)
+	s.mux.HandleFunc("/api/models/manage", s.handleModelManage)
 	s.mux.HandleFunc("/api/logs", s.handleLogs)
 	s.mux.HandleFunc("/api/config", s.handleConfig)
+
+	// ── API: HuggingFace discovery ────────────────────────────────────────
+	s.mux.HandleFunc("/api/hf/search", s.handleHFSearch)
+	s.mux.HandleFunc("/api/hf/info", s.handleHFInfo)
 }

@@ -240,7 +240,7 @@ llamactl/test/e2e/
 ├── suite_test.go       Shared helpers, HTTP client, types, TestMain banner
 ├── health_test.go      TestLlamaSwap_IsUp, TestLlamaCtlWeb_IsUp, etc.
 ├── models_list_test.go TestModels_NotEmpty, AllExpectedPresent, Shape, Mirror
-├── llamactl_api_test.go TestLlamaCtlAPI_* (status/logs/config/models/methods)
+├── llamactl_api_test.go TestLlamaCtlAPI_* (status/logs/config/models/hf-search/disabled/methods)
 └── inference_test.go   TestInference_ChatCompletion_Fast/Streamed/Embeddings/AllModels
 ```
 
@@ -257,6 +257,11 @@ llamactl/test/e2e/
 | GET | `/api/config` | Current llama-swap.yaml content |
 | POST | `/api/config` | Write new YAML; triggers llama-swap SIGHUP reload |
 | POST | `/api/action` | `{"action": "start"\|"stop"\|"restart", "service": "llamaswap"\|"comfyui"}` |
+| GET | `/api/hf/search?q=<query>` | Search HuggingFace for models |
+| GET | `/api/hf/info?id=<hf-id>` | Model info, MLX detection, GGUF file listing |
+| POST | `/api/models/install` | Install a model (SSE streaming progress) |
+| POST | `/api/models/manage` | Enable / disable / remove a model |
+| GET | `/api/models/disabled` | List disabled models from `~/AI/llamactl-disabled.yaml` |
 
 All GET-only endpoints return `405 Method Not Allowed` for non-GET requests.
 
@@ -306,11 +311,40 @@ Follows the OpenAI API spec:
 
 ## How to add a new model
 
-1. Download the model (GGUF) or note the HuggingFace model ID (MLX).
-2. Add a stanza to `llama-swap.yaml` following an existing example.
-3. Add the model ID to `expectedModels` in `llamactl/test/e2e/suite_test.go`.
-4. Run `make test-e2e` to verify the model appears in `/v1/models`.
-5. Run `make test-inference` (optional but recommended) to verify inference works.
+### Manual (recommended for known models)
+1. Add a stanza to `llama-swap.yaml` following an existing example.
+2. Add the model ID to `expectedModels` in `llamactl/test/e2e/suite_test.go`.
+3. Run `make test-e2e` to verify the model appears in `/v1/models`.
+4. Run `make test-inference` (optional but recommended) to verify inference works.
+
+### Via llamactl
+```bash
+llamactl models install google/gemma-3-12b-it       # auto-detect MLX
+llamactl models install mlx-community/phi-4-4bit    # force MLX (explicit)
+llamactl models install bartowski/Phi-4-GGUF --type gguf --quant Q4_K_M
+```
+
+---
+
+## Model management (modelmanager package)
+
+**Package**: `internal/modelmanager/`
+
+| File | Purpose |
+|------|---------|
+| `types.go` | All types: HFModel, ModelConfig, DisabledStore, InstallRequest, ManageRequest |
+| `hf.go` | HuggingFace API client: search, model info, MLX detection, GGUF file/repo finding |
+| `yamledit.go` | yaml.v3 Node manipulation of llama-swap.yaml (preserves comments) |
+| `install.go` | Install workflow: detect type, MLX config gen, GGUF download |
+| `manage.go` | Enable/Disable/Remove operations using disabled store file |
+
+**Key design decisions:**
+- Disabled models stored in `~/AI/llamactl-disabled.yaml` (separate from llama-swap.yaml)
+- MLX preferred over GGUF on Apple Silicon; detection via `FindMLXVariant()` checking multiple quant suffixes
+- Default GGUF quantization: Q4_K_M
+- `DeriveModelID`: `mlx-community/gemma-3-12b-it-4bit` → `gemma-3-12b-it-mlx`
+- yaml.Node round-trip preserves all comments; `---` document separator added by marshal is accepted by llama-swap
+- Install SSE streaming: `POST /api/models/install` emits `data: <msg>\n\n`; ends with `data: RESULT:{json}\n\n`
 
 ---
 
@@ -354,3 +388,5 @@ Key sessions:
 - `007` — Unified UI redesign, tests, docs
 - `008` — E2E test suite + API fixes (handler method enforcement, test isolation,
            embeddings struct tag bug, pgrepFirst fallback for stale launchd state)
+- `009` — Model management feature (HF search/install, enable/disable/remove via CLI + web UI,
+           modelmanager package, yaml.v3 comment-preserving edit, unit + E2E tests)

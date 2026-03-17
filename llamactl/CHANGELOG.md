@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v1.4.0] — 2026-03-17
+
+### Added
+- **Model management feature** — install, enable, disable, remove models from llama-swap.yaml:
+  - `llamactl models search <query>` — search HuggingFace for models
+  - `llamactl models install <hf-id|url>` — auto-detect MLX vs GGUF, configure and add to llama-swap
+  - `llamactl models disable <id>` — remove from active config, preserve in disabled store
+  - `llamactl models enable <id>` — restore from disabled store back to active config
+  - `llamactl models remove <id>` — permanently remove from config (with optional file deletion)
+- **HuggingFace search API** — `GET /api/hf/search?q=<query>` (proxied via llamactl-web)
+- **HF model info API** — `GET /api/hf/info?id=<hf-id>` — MLX variant detection, GGUF file listing
+- **Model install API** — `POST /api/models/install` — SSE streaming progress during install
+- **Model manage API** — `POST /api/models/manage` — enable/disable/remove via web UI
+- **Disabled models API** — `GET /api/models/disabled` — list currently disabled models
+- **Discover tab** in web UI — HF search + one-click install with real-time progress panel
+- **Model management actions** in web UI models tab — Disable and Remove buttons per model row
+- **`internal/modelmanager/` package** — clean separation of HF client, yaml manipulation, install, manage
+- **E2E tests** for new endpoints: `TestLlamaCtlAPI_HFSearch`, `TestLlamaCtlAPI_ModelDisabledList`
+- **Unit tests** for modelmanager: yaml round-trip, disabled store, manager disable/enable cycle, ID normalisation
+
+### Changed
+- `llamactl models` is now a parent command with subcommands (backward-compatible: `llamactl models` still lists)
+- Disabled models stored in `~/AI/llamactl-disabled.yaml` (separate from main config to avoid corruption)
+- yaml.v3 Node-based config editing preserves all comments and formatting in llama-swap.yaml
+
+---
+
 ## [v1.3.5] — 2026-03-14
 
 ### Added

@@ -348,6 +348,12 @@
         Models
         <span class="nav-count">{{len .Models.APIModels}}</span>
       </button>
+      <button class="nav-item" id="nav-discover" onclick="showSection('discover')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Discover
+      </button>
       <button class="nav-item" id="nav-logs" onclick="showSection('logs')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -529,30 +535,39 @@
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-models" class="section">
         <h1 class="section-title">Models</h1>
-        <p class="section-sub">{{len .Models.APIModels}} registered &middot; {{len .LlamaSwap.LoadedModels}} in memory</p>
+        <p class="section-sub">{{len .Models.APIModels}} active &middot; {{len .LlamaSwap.LoadedModels}} in memory</p>
 
+        <!-- Active models -->
         <div class="card" style="padding:0; overflow:hidden">
+          <div style="padding:16px 20px 10px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border)">
+            <span style="font-size:13px; font-weight:600; color:var(--text-1)">Active</span>
+          </div>
           {{if .Models.APIReachable}}
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>Model ID</th>
-                    <th>Type</th>
                     <th>Status</th>
+                    <th style="text-align:right; width:160px">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {{range .Models.APIModels}}
                   <tr>
                     <td class="mono-text">{{.ID}}</td>
-                    <td style="color:var(--text-3);font-size:11.5px">{{.Object}}</td>
                     <td>
                       {{if index $.Models.LoadedIDs .ID}}
                         <span class="badge badge-green">&#9679; loaded</span>
                       {{else}}
                         <span class="badge badge-gray">idle</span>
                       {{end}}
+                    </td>
+                    <td style="text-align:right">
+                      <button class="btn btn-sm" style="font-size:11px"
+                              onclick="modelAction('disable','{{.ID}}')">Disable</button>
+                      <button class="btn btn-sm" style="font-size:11px; color:var(--red); border-color:var(--red)"
+                              onclick="modelRemove('{{.ID}}')">Remove</button>
                     </td>
                   </tr>
                   {{end}}
@@ -570,7 +585,73 @@
             </div>
           {{end}}
         </div>
+
+        <!-- Disabled models (loaded via JS) -->
+        <div id="disabled-models-card" class="card" style="padding:0; overflow:hidden; margin-top:12px; display:none">
+          <div style="padding:16px 20px 10px; border-bottom:1px solid var(--border)">
+            <span style="font-size:13px; font-weight:600; color:var(--text-1)">Disabled</span>
+          </div>
+          <div id="disabled-models-body">
+            <div class="table-wrap">
+              <table><tbody id="disabled-models-rows"></tbody></table>
+            </div>
+          </div>
+        </div>
       </div><!-- /sec-models -->
+
+      <!-- ════════════════════════════════════════════════════════════════
+           DISCOVER — HuggingFace model search + install
+      ═══════════════════════════════════════════════════════════════════ -->
+      <div id="sec-discover" class="section">
+        <h1 class="section-title">Discover Models</h1>
+        <p class="section-sub">Search HuggingFace and install directly into the stack.</p>
+
+        <!-- Search bar -->
+        <div class="card" style="padding:20px">
+          <div style="display:flex; gap:10px; flex-wrap:wrap">
+            <input id="hf-search-input" type="text" placeholder="e.g. gemma, phi, mistral, qwen…"
+                   style="flex:1; min-width:180px; padding:9px 14px; background:var(--bg-2); border:1px solid var(--border); border-radius:8px; color:var(--text-1); font-size:14px; outline:none"
+                   onkeydown="if(event.key==='Enter') doHFSearch()">
+            <select id="hf-search-type" style="padding:9px 12px; background:var(--bg-2); border:1px solid var(--border); border-radius:8px; color:var(--text-1); font-size:13px">
+              <option value="">All types</option>
+              <option value="text-generation">Chat / LLM</option>
+              <option value="mlx">MLX</option>
+              <option value="gguf">GGUF</option>
+            </select>
+            <button class="btn btn-primary" onclick="doHFSearch()">Search</button>
+          </div>
+          <p id="hf-search-hint" style="font-size:12px; color:var(--text-3); margin-top:10px; margin-bottom:0">
+            MLX models are preferred automatically on Apple Silicon.
+            GGUF quantization: Q4_K_M (default).
+          </p>
+        </div>
+
+        <!-- Results -->
+        <div id="hf-results-card" class="card" style="padding:0; overflow:hidden; display:none; margin-top:12px">
+          <div id="hf-results-header" style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text-1)"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Model ID</th>
+                <th>Downloads</th>
+                <th>Pipeline</th>
+                <th style="text-align:right">Action</th>
+              </tr></thead>
+              <tbody id="hf-results-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Install progress modal-ish panel -->
+        <div id="install-panel" class="card" style="display:none; margin-top:12px; padding:20px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px">
+            <span id="install-title" style="font-size:14px; font-weight:600; color:var(--text-1)">Installing…</span>
+            <button class="btn btn-sm" onclick="document.getElementById('install-panel').style.display='none'">Close</button>
+          </div>
+          <div id="install-log" style="background:var(--bg-2); border-radius:8px; padding:14px; font-family:monospace; font-size:12px; color:var(--text-2); min-height:80px; max-height:280px; overflow-y:auto; white-space:pre-wrap"></div>
+          <div id="install-result" style="display:none; margin-top:12px; padding:12px 16px; border-radius:8px; font-size:13px"></div>
+        </div>
+      </div><!-- /sec-discover -->
 
       <!-- ════════════════════════════════════════════════════════════════
            LOGS
@@ -649,7 +730,7 @@ function closeSidebar() {
 }
 
 // ── Section navigation ─────────────────────────────────────────────────────
-const SECTIONS = ['services', 'models', 'logs', 'config'];
+const SECTIONS = ['services', 'models', 'logs', 'config', 'discover'];
 let activeSection = 'services';
 
 function showSection(name) {
@@ -769,6 +850,218 @@ document.body.addEventListener('refresh', function() {
     if (activeSection === 'logs' && currentSvc) startLogPolling(currentSvc);
   });
 });
+
+// ── Model management ────────────────────────────────────────────────────────
+
+function modelAction(action, modelID) {
+  var label = action === 'disable' ? 'Disable' : 'Enable';
+  if (!confirm(label + ' model "' + modelID + '"?')) return;
+  fetch('/api/models/manage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelID, action: action })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { alert('Error: ' + data.error); return; }
+    alert('"' + modelID + '" ' + action + 'd. Run "llamactl restart" to apply.');
+    htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
+      .then(function() { showSection('models'); loadDisabledModels(); });
+  })
+  .catch(function(e) { alert('Failed: ' + e.message); });
+}
+
+function modelRemove(modelID) {
+  var deleteFiles = confirm(
+    'Remove model "' + modelID + '"?\n\nClick OK to keep files (config only).\nPress Cancel to abort.'
+  );
+  if (deleteFiles === null) return; // cancelled (shouldn't happen, but guard it)
+
+  var delFiles = confirm('Also delete GGUF file from disk? (Cannot be undone)');
+
+  fetch('/api/models/manage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: delFiles })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { alert('Error: ' + data.error); return; }
+    alert('"' + modelID + '" removed. Run "llamactl restart" to apply.');
+    htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
+      .then(function() { showSection('models'); });
+  })
+  .catch(function(e) { alert('Failed: ' + e.message); });
+}
+
+function loadDisabledModels() {
+  fetch('/api/models/disabled')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var disabled = data.disabled || {};
+      var keys = Object.keys(disabled);
+      var card = document.getElementById('disabled-models-card');
+      if (!card) return;
+      if (keys.length === 0) { card.style.display = 'none'; return; }
+      card.style.display = '';
+      var tbody = document.getElementById('disabled-models-rows');
+      tbody.innerHTML = keys.map(function(id) {
+        var e = disabled[id];
+        return '<tr>' +
+          '<td class="mono-text">' + id + '</td>' +
+          '<td style="color:var(--text-3);font-size:11.5px">' + (e.type || '') + '</td>' +
+          '<td style="color:var(--text-3);font-size:11.5px">' + (e.hf_id || '') + '</td>' +
+          '<td style="text-align:right">' +
+            '<button class="btn btn-sm btn-success" style="font-size:11px" onclick="modelAction(\'enable\',\'' + id + '\')">Enable</button>' +
+            '<button class="btn btn-sm" style="font-size:11px; color:var(--red); border-color:var(--red); margin-left:4px" onclick="modelRemoveDisabled(\'' + id + '\')">Remove</button>' +
+          '</td>' +
+          '</tr>';
+      }).join('');
+    });
+}
+
+function modelRemoveDisabled(modelID) {
+  if (!confirm('Remove disabled model "' + modelID + '" completely?')) return;
+  var delFiles = confirm('Also delete GGUF file from disk?');
+  fetch('/api/models/manage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: delFiles })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { alert('Error: ' + data.error); return; }
+    loadDisabledModels();
+  })
+  .catch(function(e) { alert('Failed: ' + e.message); });
+}
+
+// Load disabled models when models section is shown
+var _origShowSection = showSection;
+showSection = function(name) {
+  _origShowSection(name);
+  if (name === 'models') loadDisabledModels();
+};
+
+// ── HuggingFace discovery ────────────────────────────────────────────────────
+
+function doHFSearch() {
+  var q = document.getElementById('hf-search-input').value.trim();
+  if (!q) return;
+  var type = document.getElementById('hf-search-type').value;
+  var card = document.getElementById('hf-results-card');
+  var header = document.getElementById('hf-results-header');
+  var tbody = document.getElementById('hf-results-body');
+
+  header.textContent = 'Searching…';
+  card.style.display = '';
+  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; color:var(--text-3)">Loading…</td></tr>';
+
+  var url = '/api/hf/search?q=' + encodeURIComponent(q) + (type ? '&type=' + type : '') + '&limit=20';
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        header.textContent = 'Error';
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; color:var(--red)">' + data.error + '</td></tr>';
+        return;
+      }
+      var results = data.results || [];
+      header.textContent = results.length + ' results for "' + q + '"';
+      if (results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; color:var(--text-3)">No results found.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = results.map(function(m) {
+        var dl = m.downloads > 1000 ? (m.downloads / 1000).toFixed(0) + 'k' : m.downloads;
+        return '<tr>' +
+          '<td class="mono-text" style="font-size:12px">' + m.modelId + '</td>' +
+          '<td style="color:var(--text-3);font-size:12px">' + dl + '</td>' +
+          '<td style="color:var(--text-3);font-size:12px">' + (m.pipeline_tag || '') + '</td>' +
+          '<td style="text-align:right">' +
+            '<button class="btn btn-sm btn-primary" style="font-size:11px" onclick="installModel(\'' + m.modelId + '\')">Install</button>' +
+          '</td>' +
+          '</tr>';
+      }).join('');
+    })
+    .catch(function(e) {
+      header.textContent = 'Error';
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; color:var(--red)">' + e.message + '</td></tr>';
+    });
+}
+
+function installModel(hfID) {
+  var modelID = prompt('Model ID for llamactl (leave empty to auto-derive):', '');
+  if (modelID === null) return; // cancelled
+
+  var panel = document.getElementById('install-panel');
+  var log = document.getElementById('install-log');
+  var result = document.getElementById('install-result');
+  var title = document.getElementById('install-title');
+
+  panel.style.display = '';
+  log.textContent = '';
+  result.style.display = 'none';
+  title.textContent = 'Installing ' + hfID + '…';
+
+  // Scroll into view
+  panel.scrollIntoView({ behavior: 'smooth' });
+
+  var body = JSON.stringify({ hf_id: hfID, model_id: modelID || '' });
+
+  fetch('/api/models/install', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body
+  })
+  .then(function(response) {
+    // Read streaming SSE response line by line
+    var reader = response.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+
+    function read() {
+      return reader.read().then(function(chunk) {
+        if (chunk.done) return;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(function(line) {
+          if (line.startsWith('data: ')) {
+            var msg = line.slice(6);
+            if (msg.startsWith('RESULT:')) {
+              try {
+                var res = JSON.parse(msg.slice(7));
+                result.style.display = '';
+                result.style.background = 'rgba(52,199,89,0.1)';
+                result.style.border = '1px solid rgba(52,199,89,0.3)';
+                result.style.color = 'var(--green)';
+                result.innerHTML = '✓ Installed <strong>' + res.model_id + '</strong> (' + res.type + ')<br>' +
+                  '<span style="font-size:11px;color:var(--text-3)">' + res.message + '</span>';
+                title.textContent = 'Installed: ' + res.model_id;
+              } catch(e) {}
+            } else if (msg.startsWith('ERROR:')) {
+              result.style.display = '';
+              result.style.background = 'rgba(255,59,48,0.1)';
+              result.style.border = '1px solid rgba(255,59,48,0.3)';
+              result.style.color = 'var(--red)';
+              result.textContent = msg;
+              title.textContent = 'Failed';
+            } else {
+              log.textContent += msg + '\n';
+              log.scrollTop = log.scrollHeight;
+            }
+          }
+        });
+        return read();
+      });
+    }
+    return read();
+  })
+  .catch(function(e) {
+    log.textContent += '\nError: ' + e.message;
+  });
+}
 </script>
 </body>
 </html>

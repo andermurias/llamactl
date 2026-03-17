@@ -30,6 +30,10 @@ type Config struct {
 	WebPlistPath string // ~/Library/LaunchAgents/com.llamastack.llamactl-web.plist
 	WebPort      string // 3333
 	WebLogFile   string // ~/AI/logs/llamactl-web.log
+
+	// Model manager
+	DisabledFile string // ~/AI/llamactl-disabled.yaml
+	ModelsDir    string // ~/AI/models
 }
 
 // Load returns a Config populated from environment / defaults.
@@ -59,5 +63,7 @@ func Load() *Config {
 		WebPlistPath:  filepath.Join(home, "Library", "LaunchAgents", webLabel+".plist"),
 		WebPort:       "3333",
 		WebLogFile:    filepath.Join(logDir, "llamactl-web.log"),
+		DisabledFile:  filepath.Join(aiDir, "llamactl-disabled.yaml"),
+		ModelsDir:     filepath.Join(aiDir, "models"),
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/andermurias/llamactl/internal/modelmanager"
 	"github.com/andermurias/llamactl/internal/service"
 )
 
@@ -222,4 +224,163 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "GET or POST only", http.StatusMethodNotAllowed)
 	}
+}
+
+// ── HuggingFace search ────────────────────────────────────────────────────────
+
+// handleHFSearch proxies a HuggingFace model search request.
+// GET /api/hf/search?q=<query>&type=<text-generation|mlx|gguf>&limit=<n>
+func (s *Server) handleHFSearch(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if query == "" {
+		jsonErr(w, http.StatusBadRequest, "q parameter is required")
+		return
+	}
+	modelType := r.URL.Query().Get("type") // "", "mlx", "gguf", "text-generation"
+	limit := 20
+	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 && n <= 50 {
+		limit = n
+	}
+
+	results, err := modelmanager.SearchModels(query, modelType, limit)
+	if err != nil {
+		jsonErr(w, http.StatusBadGateway, "HuggingFace API: "+err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"results": results, "count": len(results)})
+}
+
+// handleHFInfo returns info + MLX detection for a single HF model.
+// GET /api/hf/info?id=<hf-model-id>
+func (s *Server) handleHFInfo(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	hfID := modelmanager.NormalizeHFID(r.URL.Query().Get("id"))
+	if hfID == "" {
+		jsonErr(w, http.StatusBadRequest, "id parameter is required")
+		return
+	}
+
+	model, err := modelmanager.GetModelInfo(hfID)
+	if err != nil {
+		jsonErr(w, http.StatusBadGateway, "HuggingFace API: "+err.Error())
+		return
+	}
+	if model == nil {
+		jsonErr(w, http.StatusNotFound, "model not found: "+hfID)
+		return
+	}
+
+	mlxInfo := modelmanager.FindMLXVariant(hfID)
+	suggestedID := modelmanager.DeriveModelID(hfID)
+
+	jsonOK(w, map[string]any{
+		"model":        model,
+		"mlx":          mlxInfo,
+		"suggested_id": suggestedID,
+	})
+}
+
+// ── Model install ─────────────────────────────────────────────────────────────
+
+// handleModelInstall installs a HuggingFace model into the stack.
+// POST /api/models/install
+// Body: modelmanager.InstallRequest (JSON)
+// Response: streaming text/plain lines with progress, ending in JSON result.
+func (s *Server) handleModelInstall(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+
+	var req modelmanager.InstallRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+
+	// Use SSE-style streaming so the browser can show progress in real time.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	flusher, canFlush := w.(http.Flusher)
+
+	sendLine := func(msg string) {
+		_, _ = w.Write([]byte("data: " + msg + "\n\n"))
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	ins := modelmanager.NewInstaller(s.cfg.AIDir, s.cfg.ConfigFile, s.cfg.LogDir)
+	result, err := ins.Install(req, sendLine)
+	if err != nil {
+		sendLine("ERROR: " + err.Error())
+		return
+	}
+
+	// Send final JSON result as the last SSE event
+	resultJSON, _ := json.Marshal(result)
+	sendLine("RESULT:" + string(resultJSON))
+}
+
+// ── Model management (enable / disable / remove) ──────────────────────────────
+
+// handleModelManage performs enable, disable, or remove on an installed model.
+// POST /api/models/manage
+// Body: modelmanager.ManageRequest (JSON)
+func (s *Server) handleModelManage(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+
+	var req modelmanager.ManageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if req.ModelID == "" {
+		jsonErr(w, http.StatusBadRequest, "model_id is required")
+		return
+	}
+
+	mgr := modelmanager.NewManager(s.cfg.ConfigFile, s.cfg.DisabledFile, s.cfg.ModelsDir)
+
+	var err error
+	switch req.Action {
+	case modelmanager.ActionEnable:
+		err = mgr.Enable(req.ModelID)
+	case modelmanager.ActionDisable:
+		err = mgr.Disable(req.ModelID)
+	case modelmanager.ActionRemove:
+		err = mgr.Remove(req.ModelID, req.DeleteFiles)
+	default:
+		jsonErr(w, http.StatusBadRequest, "action must be enable|disable|remove")
+		return
+	}
+
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonOK(w, map[string]any{"ok": true, "model_id": req.ModelID, "action": req.Action})
+}
+
+// handleModelDisabledList returns the list of disabled models.
+// GET /api/models/disabled
+func (s *Server) handleModelDisabledList(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	mgr := modelmanager.NewManager(s.cfg.ConfigFile, s.cfg.DisabledFile, s.cfg.ModelsDir)
+	disabled, err := mgr.ListDisabled()
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"disabled": disabled})
 }
