@@ -8,6 +8,7 @@
 package service
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -187,6 +188,13 @@ type ModelsInfo struct {
 	HFModels     []string             // directory names in ~/.cache/huggingface/hub/
 	HFTotalBytes int64                // combined size of the HF cache
 	APIReachable bool                 // false when llama-swap is not running
+	MetaMap      map[string]ModelMeta // backend info keyed by model ID
+}
+
+// ModelMeta holds static metadata extracted from llama-swap.yaml for a single model.
+type ModelMeta struct {
+	Backend string // "MLX", "GGUF", "TTS", "STT", "Unknown"
+	CtxSize int    // context window size (0 = not found in config)
 }
 
 // GetModelsInfo collects model data from all sources. Never returns nil.
@@ -206,8 +214,80 @@ func GetModelsInfo(cfg *config.Config) *ModelsInfo {
 
 	info.GGUFFiles, _ = llamaswap.GGUFFiles(cfg)
 	info.HFModels, info.HFTotalBytes, _ = llamaswap.HFCachedModels()
+	info.MetaMap = parseModelMeta(cfg.ConfigFile)
 
 	return info
+}
+
+// parseModelMeta reads the llama-swap YAML config and extracts backend type
+// and context window size for each model entry.
+func parseModelMeta(configFile string) map[string]ModelMeta {
+	meta := make(map[string]ModelMeta)
+	f, err := os.Open(configFile)
+	if err != nil {
+		return meta
+	}
+	defer f.Close()
+
+	// Simple line-based parser: look for "  id:" at indent level 2
+	// then scan its "cmd:" line without pulling in a full YAML parser.
+	var currentID string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Top-level model key: exactly 2 leading spaces, ends with ":"
+		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasSuffix(trimmed, ":") && !strings.Contains(trimmed, " ") {
+				currentID = strings.TrimSuffix(trimmed, ":")
+			}
+			continue
+		}
+		if currentID == "" {
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "cmd:") {
+			cmd := strings.TrimSpace(strings.TrimPrefix(trimmed, "cmd:"))
+			cmd = strings.Trim(cmd, `"'`)
+			m := meta[currentID]
+			m.Backend = detectBackend(cmd)
+			meta[currentID] = m
+		}
+		if strings.HasPrefix(trimmed, "--ctx-size") || strings.Contains(trimmed, "--ctx-size") {
+			// Extract value after --ctx-size
+			if idx := strings.Index(trimmed, "--ctx-size"); idx >= 0 {
+				rest := strings.TrimSpace(trimmed[idx+len("--ctx-size"):])
+				rest = strings.TrimLeft(rest, " =")
+				parts := strings.Fields(rest)
+				if len(parts) > 0 {
+					if n, err := strconv.Atoi(parts[0]); err == nil {
+						m := meta[currentID]
+						m.CtxSize = n
+						meta[currentID] = m
+					}
+				}
+			}
+		}
+	}
+	return meta
+}
+
+// detectBackend classifies a model's command string into a backend type.
+func detectBackend(cmd string) string {
+	cmd = strings.ToLower(cmd)
+	switch {
+	case strings.Contains(cmd, "mlx_lm") || strings.Contains(cmd, "mlx-lm"):
+		return "MLX"
+	case strings.Contains(cmd, "llama-server") || strings.Contains(cmd, "llama_server") || strings.Contains(cmd, "llama.cpp"):
+		return "GGUF"
+	case strings.Contains(cmd, "whisper"):
+		return "STT"
+	case strings.Contains(cmd, "kokoro"):
+		return "TTS"
+	default:
+		return "API"
+	}
 }
 
 // ── Helpers (unexported) ───────────────────────────────────────────────────

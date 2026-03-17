@@ -295,12 +295,124 @@
     .cfg-status.warn  { color: var(--yellow); }
     .cfg-status.error { color: var(--red); }
     .cfg-status.muted { color: var(--text-3); }
+
+    /* ── Toast notifications ────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 200; pointer-events: none;
+    }
+    @media (max-width: 767px) { .toast-container { bottom: 80px; right: 12px; left: 12px; } }
+    .toast {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 12px 16px;
+      font-size: 13px; color: var(--text);
+      box-shadow: 0 4px 24px rgba(0,0,0,.45);
+      display: flex; align-items: flex-start; gap: 10px;
+      pointer-events: all; max-width: 360px;
+      animation: toastIn .2s cubic-bezier(.2,.8,.4,1) forwards;
+    }
+    .toast.toast-success { border-left: 3px solid var(--green); }
+    .toast.toast-error   { border-left: 3px solid var(--red); }
+    .toast.toast-info    { border-left: 3px solid var(--blue); }
+    .toast.toast-warn    { border-left: 3px solid var(--yellow); }
+    .toast-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+    .toast-body { flex: 1; }
+    .toast-title { font-weight: 600; margin-bottom: 2px; }
+    .toast-msg { font-size: 12px; color: var(--text-2); }
+    .toast-dismiss { background: none; border: none; color: var(--text-3); cursor: pointer; padding: 0; margin-left: 4px; font-size: 16px; line-height: 1; flex-shrink: 0; }
+    .toast-dismiss:hover { color: var(--text); }
+    @keyframes toastIn { from { opacity:0; transform: translateY(12px) scale(.96); } to { opacity:1; transform: none; } }
+    .toast.toast-out { animation: toastOut .18s ease forwards; }
+    @keyframes toastOut { to { opacity:0; transform: translateY(8px) scale(.95); } }
+
+    /* ── Restart banner ──────────────────────────────────────────────────── */
+    .restart-banner {
+      display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: rgba(255,214,10,.08); border: 1px solid rgba(255,214,10,.2);
+      border-radius: 10px; padding: 12px 16px; margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .restart-banner.show { display: flex; }
+    .restart-banner-msg { flex: 1; color: var(--yellow); }
+    .restart-banner-sub { font-size: 11.5px; color: var(--text-3); display: block; }
+
+    /* ── Dialog modal ────────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 100; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: 14px; padding: 24px;
+      width: 100%; max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+      animation: modalIn .2s cubic-bezier(.2,.8,.4,1);
+    }
+    @keyframes modalIn { from { opacity:0; transform: scale(.94) translateY(8px); } to { opacity:1; transform: none; } }
+    .modal-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+    .modal-body  { font-size: 13px; color: var(--text-2); margin-bottom: 20px; line-height: 1.6; }
+    .modal-check { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+    .modal-check input { accent-color: var(--red); width: 15px; height: 15px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* ── Backend type badge ──────────────────────────────────────────────── */
+    .badge-mlx  { background: rgba(100,210,255,.1); color: #64d2ff; border: 1px solid rgba(100,210,255,.2); }
+    .badge-gguf { background: rgba(255,159,10,.1);  color: #ff9f0a; border: 1px solid rgba(255,159,10,.2); }
+    .badge-tts  { background: rgba(191,90,242,.1);  color: #bf5af2; border: 1px solid rgba(191,90,242,.2); }
+    .badge-stt  { background: rgba(48,209,88,.1);   color: #30d158; border: 1px solid rgba(48,209,88,.2); }
+    .badge-api  { background: rgba(150,150,150,.1); color: var(--text-3); border: 1px solid var(--border); }
+
+    /* ── Quick test panel ────────────────────────────────────────────────── */
+    .test-drawer {
+      display: none; flex-direction: column; gap: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; margin-top: 10px;
+    }
+    .test-drawer.open { display: flex; }
+    .test-input {
+      width: 100%; padding: 10px 14px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px;
+      outline: none; font-family: inherit; resize: none;
+      transition: border-color .15s;
+    }
+    .test-input:focus { border-color: var(--border2); }
+    .test-output {
+      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-size: 12px; line-height: 1.65; color: var(--text-2);
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+      min-height: 60px; max-height: 260px; overflow-y: auto;
+      white-space: pre-wrap; display: none;
+    }
+    .test-output.show { display: block; }
   </style>
 </head>
 <body>
 
 <!-- Sidebar overlay (mobile) -->
 <div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Confirm modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modal">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-body"  id="modal-body"></div>
+    <label class="modal-check" id="modal-check-wrap" style="display:none">
+      <input type="checkbox" id="modal-check-input">
+      <span id="modal-check-label"></span>
+    </label>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
 
 <div class="layout">
 
@@ -537,25 +649,73 @@
         <h1 class="section-title">Models</h1>
         <p class="section-sub">{{len .Models.APIModels}} active &middot; {{len .LlamaSwap.LoadedModels}} in memory</p>
 
+        <!-- Restart banner (shown after config changes) -->
+        <div class="restart-banner" id="restart-banner">
+          <span class="restart-banner-msg">
+            ⚠️ Pending restart
+            <span class="restart-banner-sub">Model config changed — restart llama-swap to apply.</span>
+          </span>
+          <button class="btn btn-sm btn-default" onclick="dismissRestartBanner()">Later</button>
+          <button class="btn btn-sm btn-primary" onclick="restartLlamaSwap()">Restart now</button>
+        </div>
+
+        <!-- Quick test panel -->
+        <div id="test-drawer" class="test-drawer">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px">
+            <span style="font-size:13px; font-weight:600">Quick Test</span>
+            <div style="display:flex; gap:8px; align-items:center">
+              <select id="test-model" style="padding:6px 10px; background:var(--bg-2,var(--surface2)); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px">
+                {{range .Models.APIModels}}<option value="{{.ID}}">{{.ID}}</option>{{end}}
+              </select>
+              <button class="btn btn-sm btn-default" onclick="closeTestDrawer()">✕</button>
+            </div>
+          </div>
+          <textarea id="test-prompt" class="test-input" rows="2" placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();runTest()}"></textarea>
+          <pre id="test-output" class="test-output"></pre>
+          <div style="display:flex; justify-content:flex-end; gap:8px">
+            <span id="test-status" style="font-size:11.5px; color:var(--text-3); align-self:center"></span>
+            <button class="btn btn-sm btn-primary" onclick="runTest()">Send</button>
+          </div>
+        </div>
+
         <!-- Active models -->
         <div class="card" style="padding:0; overflow:hidden">
-          <div style="padding:16px 20px 10px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border)">
-            <span style="font-size:13px; font-weight:600; color:var(--text-1)">Active</span>
+          <div style="padding:14px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:8px">
+            <span style="font-size:13px; font-weight:600; color:var(--text-1,var(--text))">Active</span>
+            <div style="display:flex; gap:6px">
+              <button class="btn btn-sm btn-default" onclick="toggleTestDrawer()" title="Quick inference test">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Test
+              </button>
+            </div>
           </div>
           {{if .Models.APIReachable}}
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Model ID</th>
+                    <th>Model</th>
+                    <th>Backend</th>
                     <th>Status</th>
-                    <th style="text-align:right; width:160px">Actions</th>
+                    <th style="text-align:right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {{range .Models.APIModels}}
+                  {{$meta := index $.Models.MetaMap .ID}}
                   <tr>
-                    <td class="mono-text">{{.ID}}</td>
+                    <td class="mono-text">{{.ID}}{{if $meta.CtxSize}}<span style="font-size:10px; color:var(--text-3); margin-left:6px">{{$meta.CtxSize}}k ctx</span>{{end}}</td>
+                    <td>
+                      {{if $meta.Backend}}
+                        {{if eq $meta.Backend "MLX"}}<span class="badge badge-mlx">MLX</span>
+                        {{else if eq $meta.Backend "GGUF"}}<span class="badge badge-gguf">GGUF</span>
+                        {{else if eq $meta.Backend "TTS"}}<span class="badge badge-tts">TTS</span>
+                        {{else if eq $meta.Backend "STT"}}<span class="badge badge-stt">STT</span>
+                        {{else}}<span class="badge badge-api">API</span>
+                        {{end}}
+                      {{else}}<span class="badge badge-api">—</span>{{end}}
+                    </td>
                     <td>
                       {{if index $.Models.LoadedIDs .ID}}
                         <span class="badge badge-green">&#9679; loaded</span>
@@ -563,10 +723,10 @@
                         <span class="badge badge-gray">idle</span>
                       {{end}}
                     </td>
-                    <td style="text-align:right">
-                      <button class="btn btn-sm" style="font-size:11px"
+                    <td style="text-align:right; white-space:nowrap">
+                      <button class="btn btn-sm btn-default"
                               onclick="modelAction('disable','{{.ID}}')">Disable</button>
-                      <button class="btn btn-sm" style="font-size:11px; color:var(--red); border-color:var(--red)"
+                      <button class="btn btn-sm btn-danger"
                               onclick="modelRemove('{{.ID}}')">Remove</button>
                     </td>
                   </tr>
@@ -587,9 +747,9 @@
         </div>
 
         <!-- Disabled models (loaded via JS) -->
-        <div id="disabled-models-card" class="card" style="padding:0; overflow:hidden; margin-top:12px; display:none">
-          <div style="padding:16px 20px 10px; border-bottom:1px solid var(--border)">
-            <span style="font-size:13px; font-weight:600; color:var(--text-1)">Disabled</span>
+        <div id="disabled-models-card" class="card" style="padding:0; overflow:hidden; margin-top:10px; display:none">
+          <div style="padding:14px 20px; border-bottom:1px solid var(--border)">
+            <span style="font-size:13px; font-weight:600; color:var(--text-1,var(--text))">Disabled</span>
           </div>
           <div id="disabled-models-body">
             <div class="table-wrap">
@@ -851,47 +1011,157 @@ document.body.addEventListener('refresh', function() {
   });
 });
 
+// ── Toast system ─────────────────────────────────────────────────────────────
+
+function showToast(msg, type, detail) {
+  var icons = { success: '✓', error: '✕', info: 'ℹ', warn: '⚠' };
+  var tc = document.getElementById('toast-container');
+  if (!tc) return;
+  var t = document.createElement('div');
+  t.className = 'toast toast-' + (type || 'info');
+  t.innerHTML =
+    '<span class="toast-icon">' + (icons[type] || '·') + '</span>' +
+    '<div class="toast-body">' +
+      '<div class="toast-title">' + msg + '</div>' +
+      (detail ? '<div class="toast-msg">' + detail + '</div>' : '') +
+    '</div>' +
+    '<button class="toast-dismiss" onclick="dismissToast(this.parentElement)">×</button>';
+  tc.appendChild(t);
+  setTimeout(function() { dismissToast(t); }, 5000);
+}
+
+function dismissToast(el) {
+  if (!el || el._dismissed) return;
+  el._dismissed = true;
+  el.classList.add('toast-out');
+  setTimeout(function() { el.remove(); }, 200);
+}
+
+// ── Modal system ─────────────────────────────────────────────────────────────
+
+var _modalConfirm = null;
+
+function showModal(opts) {
+  // opts: { title, body, checkLabel, actions: [{label, cls, fn}] }
+  document.getElementById('modal-title').textContent = opts.title || 'Confirm';
+  document.getElementById('modal-body').textContent  = opts.body  || '';
+  var cw = document.getElementById('modal-check-wrap');
+  var ci = document.getElementById('modal-check-input');
+  var cl = document.getElementById('modal-check-label');
+  if (opts.checkLabel) {
+    cw.style.display = 'flex';
+    cl.textContent = opts.checkLabel;
+    ci.checked = false;
+  } else {
+    cw.style.display = 'none';
+  }
+  var ac = document.getElementById('modal-actions');
+  ac.innerHTML = '';
+  (opts.actions || []).forEach(function(a) {
+    var b = document.createElement('button');
+    b.className = 'btn btn-sm ' + (a.cls || 'btn-default');
+    b.textContent = a.label;
+    b.onclick = function() {
+      closeModal();
+      if (a.fn) a.fn(ci.checked);
+    };
+    ac.appendChild(b);
+  });
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ── Restart banner ───────────────────────────────────────────────────────────
+
+function showRestartBanner() {
+  var b = document.getElementById('restart-banner');
+  if (b) b.classList.add('show');
+}
+function dismissRestartBanner() {
+  var b = document.getElementById('restart-banner');
+  if (b) b.classList.remove('show');
+}
+function restartLlamaSwap() {
+  dismissRestartBanner();
+  fetch('/api/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'restart', service: 'llamaswap' })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showToast('Restart failed', 'error', data.error); return; }
+    showToast('Restarting llama-swap…', 'info', 'This may take a few seconds.');
+    setTimeout(function() {
+      htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
+        .then(function() { showSection('models'); loadDisabledModels(); });
+    }, 3500);
+  })
+  .catch(function(e) { showToast('Network error', 'error', e.message); });
+}
+
 // ── Model management ────────────────────────────────────────────────────────
 
 function modelAction(action, modelID) {
-  var label = action === 'disable' ? 'Disable' : 'Enable';
-  if (!confirm(label + ' model "' + modelID + '"?')) return;
-  fetch('/api/models/manage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_id: modelID, action: action })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.error) { alert('Error: ' + data.error); return; }
-    alert('"' + modelID + '" ' + action + 'd. Run "llamactl restart" to apply.');
-    htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
-      .then(function() { showSection('models'); loadDisabledModels(); });
-  })
-  .catch(function(e) { alert('Failed: ' + e.message); });
+  var label   = action === 'disable' ? 'Disable' : 'Enable';
+  var btnCls  = action === 'disable' ? 'btn-danger' : 'btn-success';
+  showModal({
+    title: label + ' model',
+    body: label + ' "' + modelID + '" in llama-swap config?',
+    actions: [
+      { label: 'Cancel', cls: 'btn-default' },
+      { label: label, cls: btnCls, fn: function() {
+        fetch('/api/models/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: modelID, action: action })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) { showToast('Error', 'error', data.error); return; }
+          showToast('"' + modelID + '" ' + action + 'd', 'success', 'Restart llama-swap to apply.');
+          showRestartBanner();
+          htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
+            .then(function() { showSection('models'); loadDisabledModels(); });
+        })
+        .catch(function(e) { showToast('Network error', 'error', e.message); });
+      }}
+    ]
+  });
 }
 
 function modelRemove(modelID) {
-  var deleteFiles = confirm(
-    'Remove model "' + modelID + '"?\n\nClick OK to keep files (config only).\nPress Cancel to abort.'
-  );
-  if (deleteFiles === null) return; // cancelled (shouldn't happen, but guard it)
-
-  var delFiles = confirm('Also delete GGUF file from disk? (Cannot be undone)');
-
-  fetch('/api/models/manage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: delFiles })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.error) { alert('Error: ' + data.error); return; }
-    alert('"' + modelID + '" removed. Run "llamactl restart" to apply.');
-    htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
-      .then(function() { showSection('models'); });
-  })
-  .catch(function(e) { alert('Failed: ' + e.message); });
+  showModal({
+    title: 'Remove model',
+    body: 'Remove "' + modelID + '" from llama-swap? This edits the config file.',
+    checkLabel: 'Also delete model file(s) from disk (cannot be undone)',
+    actions: [
+      { label: 'Cancel', cls: 'btn-default' },
+      { label: 'Remove', cls: 'btn-danger', fn: function(deleteFiles) {
+        fetch('/api/models/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: deleteFiles })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) { showToast('Error', 'error', data.error); return; }
+          showToast('"' + modelID + '" removed', 'success', 'Restart llama-swap to apply.');
+          showRestartBanner();
+          htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
+            .then(function() { showSection('models'); });
+        })
+        .catch(function(e) { showToast('Network error', 'error', e.message); });
+      }}
+    ]
+  });
 }
 
 function loadDisabledModels() {
@@ -907,13 +1177,18 @@ function loadDisabledModels() {
       var tbody = document.getElementById('disabled-models-rows');
       tbody.innerHTML = keys.map(function(id) {
         var e = disabled[id];
+        var backendBadge = '';
+        if (e.type) {
+          var cls = ({MLX:'badge-mlx',GGUF:'badge-gguf',TTS:'badge-tts',STT:'badge-stt'})[e.type] || 'badge-api';
+          backendBadge = '<span class="badge ' + cls + '">' + e.type + '</span>';
+        }
         return '<tr>' +
           '<td class="mono-text">' + id + '</td>' +
-          '<td style="color:var(--text-3);font-size:11.5px">' + (e.type || '') + '</td>' +
+          '<td>' + backendBadge + '</td>' +
           '<td style="color:var(--text-3);font-size:11.5px">' + (e.hf_id || '') + '</td>' +
-          '<td style="text-align:right">' +
-            '<button class="btn btn-sm btn-success" style="font-size:11px" onclick="modelAction(\'enable\',\'' + id + '\')">Enable</button>' +
-            '<button class="btn btn-sm" style="font-size:11px; color:var(--red); border-color:var(--red); margin-left:4px" onclick="modelRemoveDisabled(\'' + id + '\')">Remove</button>' +
+          '<td style="text-align:right;white-space:nowrap">' +
+            '<button class="btn btn-sm btn-success" onclick="modelAction(\'enable\',\'' + id + '\')">Enable</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="modelRemoveDisabled(\'' + id + '\')">Remove</button>' +
           '</td>' +
           '</tr>';
       }).join('');
@@ -921,19 +1196,28 @@ function loadDisabledModels() {
 }
 
 function modelRemoveDisabled(modelID) {
-  if (!confirm('Remove disabled model "' + modelID + '" completely?')) return;
-  var delFiles = confirm('Also delete GGUF file from disk?');
-  fetch('/api/models/manage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: delFiles })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (data.error) { alert('Error: ' + data.error); return; }
-    loadDisabledModels();
-  })
-  .catch(function(e) { alert('Failed: ' + e.message); });
+  showModal({
+    title: 'Remove disabled model',
+    body: 'Remove "' + modelID + '" from config?',
+    checkLabel: 'Also delete model file(s) from disk (cannot be undone)',
+    actions: [
+      { label: 'Cancel', cls: 'btn-default' },
+      { label: 'Remove', cls: 'btn-danger', fn: function(deleteFiles) {
+        fetch('/api/models/manage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_id: modelID, action: 'remove', delete_files: deleteFiles })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) { showToast('Error', 'error', data.error); return; }
+          showToast('"' + modelID + '" removed', 'success');
+          loadDisabledModels();
+        })
+        .catch(function(e) { showToast('Network error', 'error', e.message); });
+      }}
+    ]
+  });
 }
 
 // Load disabled models when models section is shown
@@ -942,6 +1226,61 @@ showSection = function(name) {
   _origShowSection(name);
   if (name === 'models') loadDisabledModels();
 };
+
+// ── Quick Test panel ─────────────────────────────────────────────────────────
+
+function toggleTestDrawer() {
+  var d = document.getElementById('test-drawer');
+  if (d.classList.contains('open')) { d.classList.remove('open'); }
+  else { d.classList.add('open'); setTimeout(function() { document.getElementById('test-prompt').focus(); }, 50); }
+}
+
+function closeTestDrawer() {
+  document.getElementById('test-drawer').classList.remove('open');
+}
+
+function runTest() {
+  var model  = document.getElementById('test-model').value;
+  var prompt = document.getElementById('test-prompt').value.trim();
+  if (!prompt) return;
+  var out    = document.getElementById('test-output');
+  var status = document.getElementById('test-status');
+  out.textContent = '';
+  out.classList.add('show');
+  status.textContent = 'Streaming…';
+
+  fetch('http://localhost:8080/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: model, messages: [{ role: 'user', content: prompt }], stream: true })
+  })
+  .then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
+    var reader = r.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = '';
+    function read() {
+      reader.read().then(function(d) {
+        if (d.done) { status.textContent = 'Done'; return; }
+        buf += decoder.decode(d.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop();
+        lines.forEach(function(line) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') return;
+          try {
+            var chunk = JSON.parse(line.slice(6));
+            var delta = (chunk.choices[0].delta || {}).content || '';
+            out.textContent += delta;
+            out.scrollTop = out.scrollHeight;
+          } catch(_) {}
+        });
+        read();
+      }).catch(function(e) { status.textContent = 'Error: ' + e.message; });
+    }
+    read();
+  })
+  .catch(function(e) { status.textContent = ''; showToast('Test failed', 'error', e.message); });
+}
 
 // ── HuggingFace discovery ────────────────────────────────────────────────────
 
@@ -979,7 +1318,7 @@ function doHFSearch() {
           '<td style="color:var(--text-3);font-size:12px">' + dl + '</td>' +
           '<td style="color:var(--text-3);font-size:12px">' + (m.pipeline_tag || '') + '</td>' +
           '<td style="text-align:right">' +
-            '<button class="btn btn-sm btn-primary" style="font-size:11px" onclick="installModel(\'' + m.modelId + '\')">Install</button>' +
+            '<button class="btn btn-sm btn-primary" onclick="installModel(\'' + m.modelId + '\')">Install</button>' +
           '</td>' +
           '</tr>';
       }).join('');
