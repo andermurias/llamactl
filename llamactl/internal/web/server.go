@@ -91,4 +91,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/presets/save", s.handlePresetsSave)
 	s.mux.HandleFunc("/api/presets/apply", s.handlePresetsApply)
 	s.mux.HandleFunc("/api/presets/delete", s.handlePresetsDelete)
+
+	// ── AI proxy: transparent forward to llama-swap with SSE keepalive ───
+	// Routes all /v1/* and /upstream/* requests to llama-swap (:8080)
+	// and injects `: keepalive N\n\n` SSE comments every 15s during the
+	// silent prefill phase, preventing client-side timeouts.
+	// Use http://<mac>:3333/v1/ instead of :8080/v1/ for timeout-free access.
+	s.mux.HandleFunc("/v1/", s.handleAIProxy)
+	s.mux.HandleFunc("/upstream/", s.handleAIProxy)
 }
