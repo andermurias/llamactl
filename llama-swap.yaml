@@ -74,7 +74,9 @@ models:
             --host 127.0.0.1
             --port ${PORT}
             -ngl 99
-            --ctx-size 8192
+            --ctx-size 2048
+            --batch-size 2048
+            --ubatch-size 2048
             --parallel 1
             --embedding
             --log-file /Users/andermurias/AI/logs/embeddings.log
