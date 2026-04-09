@@ -49,6 +49,9 @@ groups:
             - mistral-nemo-12b
             - gpt-oss-20b-mxfp4-q8-mlx
             - qwen3.5-9b-mlx-mlx
+            - gemma-3-12b-it-qat-mlx
+            - gemma-4-e4b-it-6bit-mlx
+            - gemma-4-e4b-it-gguf
 models:
     # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
     # --alias makes /v1/models report the same name clients use in requests.
@@ -326,3 +329,60 @@ models:
         checkEndpoint: "/health"
         concurrencyLimit: 1
         ttl: 300
+    # ── Chat · MLX — Gemma 3 12B QAT (Quantization-Aware Training) ──────────
+    # Same architecture as gemma-3-12b-it but trained with QAT — better quality
+    # at 4-bit than post-training quantization. Recommended daily driver.
+    gemma-3-12b-it-qat-mlx:
+        cmd: |-
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/gemma-3-12b-it-qat-4bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 32768
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 3221225472
+        useModelName: "mlx-community/gemma-3-12b-it-qat-4bit"
+        checkEndpoint: "/health"
+        concurrencyLimit: 1
+        ttl: 120
+    # ── Chat · MLX — Gemma 4 E4B 6-bit (Effective 4B, 256K context) ─────────
+    # Google Gemma 4 E4B: small 4B dense model with 256K context window.
+    # Fastest Gemma variant — great for low-latency chat and tool calling.
+    # 6-bit quantization: better quality than 4-bit with minimal RAM overhead (~3.5 GB).
+    gemma-4-e4b-it-6bit-mlx:
+        cmd: |-
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/gemma-4-e4b-it-6bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 32768
+            --prefill-step-size 512
+            --prompt-cache-size 3
+            --prompt-cache-bytes 4294967296
+        useModelName: "mlx-community/gemma-4-e4b-it-6bit"
+        checkEndpoint: "/health"
+        concurrencyLimit: 1
+        ttl: 180
+    # ── Chat · GGUF — Gemma 4 E4B Q4_K_M (llama.cpp) ───────────────────────
+    # Same model via llama.cpp — useful for comparing performance vs MLX.
+    # Q4_K_M: excellent quality/speed tradeoff at ~2.5 GB.
+    # -ngl 99: all layers on GPU (Metal).
+    gemma-4-e4b-it-gguf:
+        cmd: |-
+            llama-server
+            --model /Users/andermurias/AI/models/chat/google_gemma-4-E4B-it-Q4_K_M.gguf
+            --alias gemma-4-e4b-it-gguf
+            --host 127.0.0.1
+            --port ${PORT}
+            -ngl 99
+            --ctx-size 32768
+            --parallel 1
+            --ubatch-size 512
+            --log-file /Users/andermurias/AI/logs/gemma-4-e4b-it-gguf.log
+        useModelName: "gemma-4-e4b-it-gguf"
+        checkEndpoint: "/v1/models"
+        concurrencyLimit: 1
+        ttl: 180
