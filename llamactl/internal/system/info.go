@@ -15,17 +15,21 @@ import (
 
 // Info holds system resource metrics.
 type Info struct {
-	MemTotal     uint64  `json:"mem_total"`     // bytes — from sysctl hw.memsize
-	MemAvailable uint64  `json:"mem_available"` // bytes — free+inactive+speculative pages * 16384
-	MemUsed      uint64  `json:"mem_used"`      // bytes
-	Mem75Pct     uint64  `json:"mem_75pct"`     // 75% of total
-	CPUCores     int     `json:"cpu_cores"`     // sysctl hw.physicalcpu
+	MemTotal     uint64  `json:"mem_total"`      // bytes — from sysctl hw.memsize
+	MemAvailable uint64  `json:"mem_available"`  // bytes — free+inactive+speculative pages * 16384
+	MemUsed      uint64  `json:"mem_used"`       // bytes
+	Mem75Pct     uint64  `json:"mem_75pct"`      // 75% of total
+	CPUCores     int     `json:"cpu_cores"`      // sysctl hw.physicalcpu
+	CPULogical   int     `json:"cpu_logical"`    // sysctl hw.logicalcpu
 	CPULoadAvg1  float64 `json:"cpu_load_avg_1"` // 1-minute load average
-	DiskTotal    uint64  `json:"disk_total"`    // bytes — home filesystem
-	DiskAvail    uint64  `json:"disk_avail"`    // bytes
-	DiskUsed     uint64  `json:"disk_used"`     // bytes
-	ModelsDirGB  float64 `json:"models_dir_gb"` // ~/AI/models approximate size
-	HFCacheGB    float64 `json:"hf_cache_gb"`   // ~/.cache/huggingface approximate size
+	ChipModel    string  `json:"chip_model"`     // e.g. "Apple M4"
+	MacOSVersion string  `json:"macos_version"`  // e.g. "15.3.1"
+	HWModel      string  `json:"hw_model"`       // e.g. "Mac16,10"
+	DiskTotal    uint64  `json:"disk_total"`     // bytes — home filesystem
+	DiskAvail    uint64  `json:"disk_avail"`     // bytes
+	DiskUsed     uint64  `json:"disk_used"`      // bytes
+	ModelsDirGB  float64 `json:"models_dir_gb"`  // ~/AI/models approximate size
+	HFCacheGB    float64 `json:"hf_cache_gb"`    // ~/.cache/huggingface approximate size
 }
 
 const pageSize = 16384 // macOS default page size (16 KB on Apple Silicon)
@@ -58,6 +62,22 @@ func Get() (*Info, error) {
 		MemUsed:      memTotal - memAvail,
 		Mem75Pct:     memTotal * 3 / 4,
 		CPUCores:     cpuCores,
+	}
+
+	// Logical CPU count (best-effort)
+	if n, err := sysctlInt("hw.logicalcpu"); err == nil {
+		info.CPULogical = n
+	}
+
+	// Chip model, HW model, macOS version (best-effort)
+	if chip, err := sysctlStr("machdep.cpu.brand_string"); err == nil {
+		info.ChipModel = chip
+	}
+	if hwm, err := sysctlStr("hw.model"); err == nil {
+		info.HWModel = hwm
+	}
+	if out, err := exec.Command("sw_vers", "-productVersion").Output(); err == nil {
+		info.MacOSVersion = strings.TrimSpace(string(out))
 	}
 
 	// Load average (best-effort)
@@ -106,6 +126,14 @@ func sysctlInt(key string) (int, error) {
 		return 0, fmt.Errorf("parse sysctl %s: %w", key, err)
 	}
 	return v, nil
+}
+
+func sysctlStr(key string) (string, error) {
+	out, err := exec.Command("/usr/sbin/sysctl", "-n", key).Output()
+	if err != nil {
+		return "", fmt.Errorf("sysctl %s: %w", key, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // vmStatPages parses `vm_stat` output and returns free, inactive, speculative

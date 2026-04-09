@@ -1027,15 +1027,59 @@
       ═══════════════════════════════════════════════════════════════════ -->
       <div id="sec-system" class="section">
         <h1 class="section-title">System</h1>
-        <p class="section-sub">Hardware resources and memory usage.</p>
+        <p class="section-sub">Hardware, memory, disk and AI stack processes.</p>
 
+        <!-- Hardware info -->
         <div class="card" style="padding:20px">
-          <div style="font-size:13px; font-weight:600; margin-bottom:12px">Memory</div>
-          <div id="sys-ram-bars" style="display:flex; flex-direction:column; gap:8px">
-            Loading…
+          <div style="font-size:13px; font-weight:600; margin-bottom:12px">Hardware</div>
+          <div id="sys-hw" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px">
+            <span style="font-size:12px; color:var(--text-3)">Loading…</span>
           </div>
         </div>
 
+        <!-- Memory -->
+        <div class="card" style="padding:20px; margin-top:10px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+            <span style="font-size:13px; font-weight:600">Memory</span>
+            <button class="btn btn-sm btn-default" onclick="loadSystemInfo()">↻ Refresh</button>
+          </div>
+          <div id="sys-ram-bars" style="display:flex; flex-direction:column; gap:8px">
+            <span style="font-size:12px; color:var(--text-3)">Loading…</span>
+          </div>
+          <div id="sys-proc-mem" style="margin-top:12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:8px"></div>
+        </div>
+
+        <!-- Disk -->
+        <div class="card" style="padding:20px; margin-top:10px">
+          <div style="font-size:13px; font-weight:600; margin-bottom:12px">Disk</div>
+          <div id="sys-disk" style="display:flex; flex-direction:column; gap:10px">
+            <span style="font-size:12px; color:var(--text-3)">Loading…</span>
+          </div>
+        </div>
+
+        <!-- AI Stack Processes -->
+        <div class="card" style="padding:20px; margin-top:10px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+            <span style="font-size:13px; font-weight:600">AI Stack Processes</span>
+            <button class="btn btn-sm btn-default" onclick="loadProcesses()">↻ Refresh</button>
+          </div>
+          <div id="sys-processes">
+            <span style="font-size:12px; color:var(--text-3)">Loading…</span>
+          </div>
+        </div>
+
+        <!-- Stack Versions -->
+        <div class="card" style="padding:20px; margin-top:10px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+            <span style="font-size:13px; font-weight:600">Stack Versions</span>
+            <button class="btn btn-sm btn-default" onclick="loadVersionsCard()">Load versions</button>
+          </div>
+          <div id="sys-versions">
+            <span style="font-size:12px; color:var(--text-3)">Click "Load versions" to fetch.</span>
+          </div>
+        </div>
+
+        <!-- Config Presets -->
         <div class="card" style="padding:20px; margin-top:10px">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
             <span style="font-size:13px; font-weight:600">Config Presets</span>
@@ -1812,25 +1856,192 @@ function installModel(hfID) {
 function loadSystemInfo() {
   fetch('/api/system').then(function(r) { return r.json(); }).then(function(info) {
     window._sysInfo = info;
-    var bars = document.getElementById('sys-ram-bars');
-    if (!bars) return;
-    var total = info.mem_total;
-    var used = info.mem_used;
-    var avail = info.mem_available;
-    function gb(b) { return (b / 1e9).toFixed(1); }
-    function pct(part, whole) { return whole ? Math.min(100, Math.round(part / whole * 100)) : 0; }
-    bars.innerHTML =
-      '<div style="font-size:12px; color:var(--text-3); margin-bottom:2px">Total: ' + gb(total) + ' GB unified · ' + info.cpu_cores + ' cores</div>' +
-      '<div style="font-size:12px; color:var(--text-2); margin-bottom:6px">Available: ' + gb(avail) + ' GB &nbsp;·&nbsp; Used: ' + gb(used) + ' GB</div>' +
-      '<div style="position:relative; height:24px; background:var(--surface2); border-radius:8px; overflow:hidden">' +
-        '<div style="height:100%; width:' + pct(used, total) + '%; background:linear-gradient(90deg, var(--blue), #5ac8fa); border-radius:8px; transition:width .4s"></div>' +
-        '<div style="position:absolute; top:50%; right:8px; transform:translateY(-50%); font-size:11px; color:var(--text-3)">' + pct(used, total) + '% used</div>' +
-      '</div>' +
-      '<div style="font-size:11.5px; color:var(--text-3); margin-top:6px">Recommended model budget (75%): <strong style="color:var(--text-2)">' + gb(info.mem_75pct) + ' GB</strong></div>';
+    renderHardwareCard(info);
+    renderMemoryCard(info);
+    renderDiskCard(info);
+    loadProcesses();
+    loadProcMemCard(info);
     loadPresets();
   }).catch(function(e) {
-    var bars = document.getElementById('sys-ram-bars');
-    if (bars) bars.innerHTML = '<span style="color:var(--red);font-size:12px">Error: ' + e.message + '</span>';
+    ['sys-hw','sys-ram-bars','sys-disk'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.innerHTML = '<span style="color:var(--red);font-size:12px">Error: ' + e.message + '</span>';
+    });
+  });
+}
+
+function hwTile(label, value) {
+  return '<div style="background:var(--surface2); border-radius:8px; padding:10px 14px">' +
+    '<div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:4px">' + label + '</div>' +
+    '<div style="font-size:13px; font-weight:600; color:var(--text-1)">' + value + '</div>' +
+  '</div>';
+}
+
+function renderHardwareCard(info) {
+  var el = document.getElementById('sys-hw');
+  if (!el) return;
+  var gb = function(b) { return (b / 1073741824).toFixed(1) + ' GB'; };
+  el.innerHTML =
+    hwTile('Chip', info.chip_model || '—') +
+    hwTile('RAM', gb(info.mem_total)) +
+    hwTile('CPU Cores', (info.cpu_cores || '—') + ' physical · ' + (info.cpu_logical || '—') + ' logical') +
+    hwTile('Hardware', info.hw_model || '—') +
+    hwTile('macOS', info.macos_version || '—') +
+    hwTile('Load (1m)', info.cpu_load_avg_1 !== undefined ? info.cpu_load_avg_1.toFixed(2) : '—');
+}
+
+function renderMemoryCard(info) {
+  var el = document.getElementById('sys-ram-bars');
+  if (!el) return;
+  var total = info.mem_total, used = info.mem_used, avail = info.mem_available;
+  function gb(b) { return (b / 1e9).toFixed(1); }
+  function pct(part, whole) { return whole ? Math.min(100, Math.round(part / whole * 100)) : 0; }
+  var usedPct = pct(used, total);
+  var color = usedPct > 85 ? 'var(--red)' : usedPct > 65 ? '#f5a623' : 'linear-gradient(90deg, var(--blue), #5ac8fa)';
+  el.innerHTML =
+    '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:10px">' +
+      '<div style="background:var(--surface2); border-radius:8px; padding:10px 14px; text-align:center">' +
+        '<div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em">Total</div>' +
+        '<div style="font-size:14px; font-weight:700; margin-top:4px">' + gb(total) + ' GB</div>' +
+      '</div>' +
+      '<div style="background:var(--surface2); border-radius:8px; padding:10px 14px; text-align:center">' +
+        '<div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em">Used</div>' +
+        '<div style="font-size:14px; font-weight:700; margin-top:4px; color:' + (usedPct > 85 ? 'var(--red)' : 'inherit') + '">' + gb(used) + ' GB</div>' +
+      '</div>' +
+      '<div style="background:var(--surface2); border-radius:8px; padding:10px 14px; text-align:center">' +
+        '<div style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em">Available</div>' +
+        '<div style="font-size:14px; font-weight:700; margin-top:4px; color:var(--green)">' + gb(avail) + ' GB</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="position:relative; height:20px; background:var(--surface2); border-radius:10px; overflow:hidden">' +
+      '<div style="height:100%; width:' + usedPct + '%; background:' + color + '; border-radius:10px; transition:width .4s"></div>' +
+      '<div style="position:absolute; top:50%; right:8px; transform:translateY(-50%); font-size:11px; color:var(--text-3)">' + usedPct + '%</div>' +
+    '</div>' +
+    '<div style="font-size:11.5px; color:var(--text-3); margin-top:6px">Model budget (75%): <strong style="color:var(--text-2)">' + gb(info.mem_75pct) + ' GB</strong></div>';
+}
+
+function loadProcMemCard(info) {
+  var total = info ? info.mem_total : 0;
+  fetch('/api/memory').then(function(r) { return r.json(); }).then(function(mem) {
+    var el = document.getElementById('sys-proc-mem');
+    if (!el) return;
+    var entries = Object.entries(mem);
+    if (entries.length === 0) { el.innerHTML = ''; return; }
+    function mb(b) { return (b / 1048576).toFixed(0) + ' MB'; }
+    function pct(b) { return total ? Math.min(100, Math.round(b / total * 100)) : 0; }
+    el.innerHTML = entries.map(function(kv) {
+      var label = kv[0].replace(/_/g, ' ');
+      var p = pct(kv[1]);
+      return '<div style="background:var(--surface2); border-radius:8px; padding:8px 12px">' +
+        '<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px">' +
+          '<span style="color:var(--text-2)">' + label + '</span>' +
+          '<span style="color:var(--text-3)">' + mb(kv[1]) + ' (' + p + '%)</span>' +
+        '</div>' +
+        '<div style="height:4px; background:var(--surface3,var(--border)); border-radius:4px; overflow:hidden">' +
+          '<div style="height:100%; width:' + p + '%; background:var(--blue); transition:width .4s"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  });
+}
+
+function renderDiskCard(info) {
+  var el = document.getElementById('sys-disk');
+  if (!el) return;
+  function gb(b) { return (b / 1e9).toFixed(1); }
+  function pct(part, whole) { return whole ? Math.min(100, Math.round(part / whole * 100)) : 0; }
+  function diskBar(label, used, total, note) {
+    var p = pct(used, total);
+    var color = p > 90 ? 'var(--red)' : p > 70 ? '#f5a623' : 'var(--green)';
+    return '<div>' +
+      '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px">' +
+        '<span style="font-weight:600">' + label + '</span>' +
+        '<span style="color:var(--text-3)">' + gb(used) + ' / ' + gb(total) + ' GB' + (note ? ' · ' + note : '') + '</span>' +
+      '</div>' +
+      '<div style="position:relative; height:14px; background:var(--surface2); border-radius:7px; overflow:hidden">' +
+        '<div style="height:100%; width:' + p + '%; background:' + color + '; border-radius:7px; transition:width .4s"></div>' +
+        '<div style="position:absolute; top:50%; right:6px; transform:translateY(-50%); font-size:10px; color:var(--text-3)">' + p + '%</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function sizeBar(label, gb_val, total_gb) {
+    var p = total_gb ? Math.min(100, Math.round(gb_val / total_gb * 100)) : 0;
+    return '<div style="display:flex; align-items:center; gap:10px">' +
+      '<div style="width:120px; font-size:12px; color:var(--text-2)">' + label + '</div>' +
+      '<div style="flex:1; height:8px; background:var(--surface2); border-radius:4px; overflow:hidden">' +
+        '<div style="height:100%; width:' + p + '%; background:var(--purple,#bf5af2); transition:width .4s"></div>' +
+      '</div>' +
+      '<div style="font-size:11px; color:var(--text-3); min-width:60px; text-align:right">' + gb_val.toFixed(1) + ' GB</div>' +
+    '</div>';
+  }
+  var totalGB = info.disk_total / 1e9;
+  el.innerHTML =
+    diskBar('Root Disk', info.disk_used, info.disk_total) +
+    '<div style="margin-top:10px; display:flex; flex-direction:column; gap:6px">' +
+      sizeBar('Models dir', info.models_dir_gb || 0, totalGB) +
+      sizeBar('HF Cache', info.hf_cache_gb || 0, totalGB) +
+    '</div>';
+}
+
+function loadProcesses() {
+  var el = document.getElementById('sys-processes');
+  if (!el) return;
+  fetch('/api/processes').then(function(r) { return r.json(); }).then(function(data) {
+    var procs = data.processes || [];
+    if (procs.length === 0) {
+      el.innerHTML = '<span style="font-size:12px; color:var(--text-3)">No AI stack processes found.</span>';
+      return;
+    }
+    function mb(b) { return b >= 1073741824 ? (b/1073741824).toFixed(1)+' GB' : Math.round(b/1048576)+' MB'; }
+    el.innerHTML =
+      '<table style="width:100%; border-collapse:collapse; font-size:12px">' +
+        '<thead><tr style="border-bottom:1px solid var(--border)">' +
+          '<th style="text-align:left; padding:5px 8px; color:var(--text-3); font-weight:500">Process</th>' +
+          '<th style="text-align:right; padding:5px 8px; color:var(--text-3); font-weight:500">PID</th>' +
+          '<th style="text-align:right; padding:5px 8px; color:var(--text-3); font-weight:500">RSS</th>' +
+          '<th style="text-align:right; padding:5px 8px; color:var(--text-3); font-weight:500">CPU%</th>' +
+          '<th style="text-align:right; padding:5px 8px; color:var(--text-3); font-weight:500">Uptime</th>' +
+        '</tr></thead>' +
+        '<tbody>' + procs.map(function(p) {
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:6px 8px; color:var(--text-1)">' + (p.display || p.name) + '</td>' +
+            '<td style="padding:6px 8px; text-align:right; color:var(--text-3); font-family:ui-monospace,monospace">' + p.pid + '</td>' +
+            '<td style="padding:6px 8px; text-align:right; font-weight:600">' + mb(p.rss_bytes) + '</td>' +
+            '<td style="padding:6px 8px; text-align:right; color:' + (p.cpu_pct > 50 ? 'var(--red)' : p.cpu_pct > 10 ? '#f5a623' : 'var(--text-2)') + '">' + p.cpu_pct.toFixed(1) + '%</td>' +
+            '<td style="padding:6px 8px; text-align:right; color:var(--text-3); font-family:ui-monospace,monospace; font-size:11px">' + p.elapsed + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody>' +
+      '</table>';
+  }).catch(function() {
+    el.innerHTML = '<span style="font-size:12px; color:var(--text-3)">Could not load processes.</span>';
+  });
+}
+
+function loadVersionsCard() {
+  var el = document.getElementById('sys-versions');
+  if (!el) return;
+  el.innerHTML = '<span style="font-size:12px; color:var(--text-3)">Loading… (may take a few seconds)</span>';
+  fetch('/api/versions').then(function(r) { return r.json(); }).then(function(v) {
+    var rows = [
+      ['llamactl', v.llamactl],
+      ['llama-swap', v.llama_swap],
+      ['llama.cpp', v.llama_cpp],
+      ['mlx', v.mlx],
+      ['mlx-lm', v.mlx_lm],
+      ['macOS', v.macos],
+      ['Python', v.python],
+    ];
+    el.innerHTML =
+      '<table style="width:100%; border-collapse:collapse; font-size:12px">' +
+        '<tbody>' + rows.filter(function(r){ return r[1]; }).map(function(row) {
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:6px 8px; color:var(--text-3); width:120px">' + row[0] + '</td>' +
+            '<td style="padding:6px 8px; font-family:ui-monospace,monospace; color:var(--text-1)">' + row[1] + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody>' +
+      '</table>';
+  }).catch(function() {
+    el.innerHTML = '<span style="font-size:12px; color:var(--red)">Failed to load versions.</span>';
   });
 }
 

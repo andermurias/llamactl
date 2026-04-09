@@ -91,6 +91,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/running", s.handleRunning)
 	s.mux.HandleFunc("/api/unload", s.handleUnload)
 	s.mux.HandleFunc("/api/memory", s.handleProcessMemory)
+	s.mux.HandleFunc("/api/processes", s.handleProcesses)
 
 	// ── API: config presets ───────────────────────────────────────────────
 	s.mux.HandleFunc("/api/presets", s.handlePresets)

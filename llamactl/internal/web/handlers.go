@@ -1037,6 +1037,84 @@ func (s *Server) handleUnload(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"ok": true, "status": resp.StatusCode})
 }
 
+// ProcessEntry holds info about one running AI-stack process.
+type ProcessEntry struct {
+	PID     int     `json:"pid"`
+	Name    string  `json:"name"`
+	Display string  `json:"display"`
+	CPUPct  float64 `json:"cpu_pct"`
+	RSSBytes int64  `json:"rss_bytes"`
+	Elapsed string  `json:"elapsed"`
+}
+
+// handleProcesses returns a list of AI-stack processes with PID, RSS, CPU%, elapsed time.
+// GET /api/processes
+func (s *Server) handleProcesses(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+
+	// ai-stack processes to track: display name → basename pattern
+	targets := []struct{ pattern, display string }{
+		{"llama-swap", "llama-swap"},
+		{"llamactl", "llamactl web"},
+		{"mlx_lm.server", "mlx_lm (backend)"},
+		{"mlx_lm", "mlx_lm"},
+		{"llama-server", "llama-server"},
+		{"whisper_server", "whisper STT"},
+		{"kokoro", "kokoro TTS"},
+		{"uvicorn", "FastAPI (uvicorn)"},
+	}
+
+	out, err := exec.Command("sh", "-c",
+		`ps -A -o pid=,%cpu=,rss=,etime=,command= 2>/dev/null`,
+	).Output()
+	if err != nil {
+		jsonOK(w, map[string]any{"processes": []ProcessEntry{}})
+		return
+	}
+
+	seen := map[int]bool{}
+	var procs []ProcessEntry
+
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		pid, _ := strconv.Atoi(fields[0])
+		if pid == 0 || seen[pid] {
+			continue
+		}
+		cpuPct, _ := strconv.ParseFloat(fields[1], 64)
+		rssKB, _ := strconv.ParseInt(fields[2], 10, 64)
+		elapsed := fields[3]
+		// full command path is fields[4..] — extract basename of executable
+		cmdPath := fields[4]
+		basename := filepath.Base(cmdPath)
+
+		for _, t := range targets {
+			if strings.Contains(basename, t.pattern) || strings.Contains(cmdPath, t.pattern) {
+				seen[pid] = true
+				procs = append(procs, ProcessEntry{
+					PID:      pid,
+					Name:     t.pattern,
+					Display:  t.display,
+					CPUPct:   cpuPct,
+					RSSBytes: rssKB * 1024,
+					Elapsed:  elapsed,
+				})
+				break
+			}
+		}
+	}
+
+	if procs == nil {
+		procs = []ProcessEntry{}
+	}
+	jsonOK(w, map[string]any{"processes": procs})
+}
+
 // handleProcessMemory returns RSS memory usage in bytes for key services.
 // GET /api/memory
 func (s *Server) handleProcessMemory(w http.ResponseWriter, r *http.Request) {
