@@ -27,7 +27,7 @@ import (
 )
 
 // NewCmd creates the "web" parent command with all subcommands attached.
-func NewCmd(cfg *config.Config) *cobra.Command {
+func NewCmd(cfg *config.Config, version string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "web",
 		Short: "Manage the llamactl Web UI (port " + cfg.WebPort + ")",
@@ -45,7 +45,7 @@ It provides a browser-based dashboard to start/stop services and view logs.
 	}
 
 	cmd.AddCommand(
-		newServeCmd(cfg),
+		newServeCmd(cfg, version),
 		newStartCmd(cfg),
 		newStopCmd(cfg),
 		newRestartCmd(cfg),
@@ -61,14 +61,14 @@ It provides a browser-based dashboard to start/stop services and view logs.
 
 // ── serve (internal, called by launchd) ──────────────────────────────────────
 
-func newServeCmd(cfg *config.Config) *cobra.Command {
+func newServeCmd(cfg *config.Config, version string) *cobra.Command {
 	var port string
 	cmd := &cobra.Command{
 		Use:    "serve",
 		Short:  "Run the HTTP server (called by launchd — not for direct use)",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			s, err := webserver.New(cfg)
+			s, err := webserver.New(cfg, version)
 			if err != nil {
 				return fmt.Errorf("init web server: %w", err)
 			}

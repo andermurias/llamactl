@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -789,4 +790,52 @@ func (s *Server) handlePresetsDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]bool{"ok": true})
+}
+
+// handleVersions returns version strings for all stack components.
+// GET /api/versions
+func (s *Server) handleVersions(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+
+	ver := map[string]string{}
+
+	// llamactl
+	ver["llamactl"] = s.version
+
+	// llama-swap
+	if out, err := exec.Command("llama-swap", "--version").CombinedOutput(); err == nil {
+		line := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
+		ver["llama_swap"] = line
+	}
+
+	// llama-server (llama.cpp)
+	if out, err := exec.Command("llama-server", "--version").CombinedOutput(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(line, "version:") {
+				ver["llama_cpp"] = strings.TrimSpace(strings.TrimPrefix(line, "version:"))
+				break
+			}
+		}
+	}
+
+	// mlx and mlx-lm via conda python
+	pythonBin := "/opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/python"
+	if out, err := exec.Command(pythonBin, "-c",
+		"import mlx_lm; print(mlx_lm.__version__)",
+	).CombinedOutput(); err == nil {
+		if v := strings.TrimSpace(string(out)); v != "" {
+			ver["mlx_lm"] = v
+		}
+	}
+	if out, err := exec.Command(pythonBin, "-c",
+		"import mlx.core as mx; print(mx.__version__ if hasattr(mx,'__version__') else 'n/a')",
+	).CombinedOutput(); err == nil {
+		if v := strings.TrimSpace(string(out)); v != "" {
+			ver["mlx"] = v
+		}
+	}
+
+	jsonOK(w, ver)
 }

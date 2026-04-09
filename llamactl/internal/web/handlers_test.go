@@ -86,7 +86,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		}
 	})
 
-	srv, err := web.New(cfg)
+	srv, err := web.New(cfg, "test")
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestHandleLogs_MissingLogFile(t *testing.T) {
 	os.WriteFile(cfg.ConfigFile, []byte("# empty\n"), 0o644)
 	os.WriteFile(cfg.ComfyUILog, []byte(""), 0o644)
 
-	srvWeb, err := web.New(cfg)
+	srvWeb, err := web.New(cfg, "test")
 	if err != nil {
 		t.Fatal(err)
 	}

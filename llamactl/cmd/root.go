@@ -71,7 +71,7 @@ func init() {
 		newUpgradeCmd(),
 		newVersionCmd(),
 		cmdcomfyui.NewCmd(cfg),
-		cmdweb.NewCmd(cfg),
+		cmdweb.NewCmd(cfg, Version),
 		cmdconfig.NewCmd(cfg),
 	)
 }

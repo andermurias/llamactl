@@ -24,19 +24,20 @@ var embeddedFS embed.FS
 
 // Server holds the HTTP server and its dependencies.
 type Server struct {
-	cfg  *config.Config
-	tmpl *template.Template
-	mux  *http.ServeMux
+	cfg     *config.Config
+	version string
+	tmpl    *template.Template
+	mux     *http.ServeMux
 }
 
 // New creates and configures a new Server.
-func New(cfg *config.Config) (*Server, error) {
+func New(cfg *config.Config, version string) (*Server, error) {
 	tmpl, err := template.ParseFS(embeddedFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
 
-	s := &Server{cfg: cfg, tmpl: tmpl, mux: http.NewServeMux()}
+	s := &Server{cfg: cfg, version: version, tmpl: tmpl, mux: http.NewServeMux()}
 	s.routes()
 	return s, nil
 }
@@ -85,6 +86,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/system", s.handleSystem)
 	s.mux.HandleFunc("/api/action", s.handleAction)
 	s.mux.HandleFunc("/api/analytics", s.handleAnalytics)
+	s.mux.HandleFunc("/api/versions", s.handleVersions)
 
 	// ── API: config presets ───────────────────────────────────────────────
 	s.mux.HandleFunc("/api/presets", s.handlePresets)

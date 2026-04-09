@@ -156,8 +156,8 @@
     .hamburger:hover { background: var(--surface2); }
 
     .page {
-      flex: 1; padding: 28px 24px;
-      max-width: 860px; width: 100%;
+      flex: 1; padding: 28px 32px;
+      max-width: 1280px; width: 100%;
     }
     @media (max-width: 767px) { .page { padding: 20px 16px 80px; } }
 
@@ -449,6 +449,26 @@
   </div>
 </div>
 
+<!-- Versions panel modal -->
+<div class="modal-overlay" id="versions-overlay" onclick="if(event.target===this)closeVersionsPanel()" style="display:none">
+  <div class="modal" style="min-width:380px;max-width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0">Component Versions</div>
+      <button onclick="closeVersionsPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px" id="versions-table">
+      <tbody id="versions-body">
+        <tr><td colspan="2" style="color:var(--text-3);padding:20px;text-align:center">Loading…</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:16px;text-align:right">
+      <button class="btn btn-sm" onclick="closeVersionsPanel()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="layout">
 
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -533,12 +553,21 @@
     <!-- Footer -->
     <div class="sidebar-footer">
       <button class="nav-item" style="color:var(--text-3);font-size:12px"
-              hx-get="/" hx-target="body" hx-swap="outerHTML">
+              onclick="location.reload()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
           <polyline points="23 4 23 10 17 10"/>
           <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
         Refresh
+      </button>
+      <button class="nav-item" style="color:var(--text-3);font-size:12px"
+              onclick="showVersionsPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        About
       </button>
     </div>
   </aside>
@@ -611,7 +640,7 @@
               {{if .LlamaSwap.IsRunning}}
                 <button class="btn btn-default btn-sm"
                         hx-post="/api/llamaswap/restart"
-                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                        hx-on::after-request="setTimeout(()=>location.reload(),2500)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="23 4 23 10 17 10"/>
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -620,13 +649,13 @@
                 </button>
                 <button class="btn btn-danger btn-sm"
                         hx-post="/api/llamaswap/stop"
-                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                        hx-on::after-request="setTimeout(()=>location.reload(),1500)">
                   Stop
                 </button>
               {{else}}
                 <button class="btn btn-success btn-sm"
                         hx-post="/api/llamaswap/start"
-                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
+                        hx-on::after-request="setTimeout(()=>location.reload(),3000)">
                   Start
                 </button>
               {{end}}
@@ -664,13 +693,13 @@
                 </a>
                 <button class="btn btn-danger btn-sm"
                         hx-post="/api/comfyui/stop"
-                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),1500)">
+                        hx-on::after-request="setTimeout(()=>location.reload(),1500)">
                   Stop
                 </button>
               {{else}}
                 <button class="btn btn-success btn-sm"
                         hx-post="/api/comfyui/start"
-                        hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),5000)">
+                        hx-on::after-request="setTimeout(()=>location.reload(),5000)">
                   Start
                 </button>
               {{end}}
@@ -786,7 +815,7 @@
               <p style="font-size:13px; margin-bottom:14px">llama-swap is not running.</p>
               <button class="btn btn-success btn-sm"
                       hx-post="/api/llamaswap/start"
-                      hx-on::after-request="setTimeout(()=>htmx.trigger('body','refresh'),3000)">
+                      hx-on::after-request="setTimeout(()=>location.reload(),3000)">
                 Start llama-swap
               </button>
             </div>
@@ -1012,11 +1041,14 @@ const SECTIONS = ['services', 'models', 'logs', 'config', 'discover', 'analytics
 let activeSection = 'services';
 
 function showSection(name) {
+  if (!SECTIONS.includes(name)) name = 'services';
   SECTIONS.forEach(function(s) {
     document.getElementById('sec-' + s).classList.toggle('active', s === name);
     document.getElementById('nav-' + s).classList.toggle('active', s === name);
   });
   activeSection = name;
+  // Update URL hash so the page can be refreshed/bookmarked
+  history.replaceState(null, '', '#' + name);
   closeSidebar();
 
   if (name === 'logs') {
@@ -1027,6 +1059,12 @@ function showSection(name) {
   }
   if (name === 'config' && !configLoaded) loadConfig();
 }
+
+// Restore section from URL hash on load / back-button navigation
+window.addEventListener('hashchange', function() {
+  var hash = location.hash.replace('#', '');
+  if (SECTIONS.includes(hash)) showSection(hash);
+});
 
 // ── Logs ───────────────────────────────────────────────────────────────────
 var currentSvc = null;
@@ -1245,8 +1283,37 @@ function closeModal() {
 }
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Escape') { closeModal(); closeVersionsPanel(); }
 });
+
+// ── Versions panel ───────────────────────────────────────────────────────────
+function showVersionsPanel() {
+  var overlay = document.getElementById('versions-overlay');
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  var tbody = document.getElementById('versions-body');
+  tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-3);padding:20px;text-align:center">Loading…</td></tr>';
+  fetch('/api/versions').then(function(r) { return r.json(); }).then(function(d) {
+    var labels = {
+      llamactl: 'llamactl', llama_swap: 'llama-swap', llama_cpp: 'llama.cpp (llama-server)',
+      mlx_lm: 'mlx-lm', mlx: 'mlx'
+    };
+    var order = ['llamactl','llama_swap','llama_cpp','mlx_lm','mlx'];
+    tbody.innerHTML = order.map(function(k) {
+      var val = d[k] || '—';
+      return '<tr style="border-bottom:1px solid var(--border)">' +
+        '<td style="padding:9px 12px;color:var(--text-3);white-space:nowrap;width:50%">' + (labels[k]||k) + '</td>' +
+        '<td style="padding:9px 12px;font-family:monospace;font-size:12.5px;color:var(--text)">' + val + '</td>' +
+        '</tr>';
+    }).join('');
+  }).catch(function() {
+    tbody.innerHTML = '<tr><td colspan="2" style="color:var(--red);padding:12px">Failed to load version info</td></tr>';
+  });
+}
+function closeVersionsPanel() {
+  document.getElementById('versions-overlay').style.display = 'none';
+}
 
 // ── Restart banner ───────────────────────────────────────────────────────────
 
@@ -1269,10 +1336,7 @@ function restartLlamaSwap() {
   .then(function(data) {
     if (data.error) { showToast('Restart failed', 'error', data.error); return; }
     showToast('Restarting llama-swap…', 'info', 'This may take a few seconds.');
-    setTimeout(function() {
-      htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
-        .then(function() { showSection('models'); loadDisabledModels(); });
-    }, 3500);
+    setTimeout(function() { location.reload(); }, 3000);
   })
   .catch(function(e) { showToast('Network error', 'error', e.message); });
 }
@@ -1560,8 +1624,13 @@ function hfRenderTable(results) {
     var p = getParamsB(m);
     var paramsStr = p > 0 ? (p >= 1 ? p.toFixed(1) + 'B' : (p * 1000).toFixed(0) + 'M') : '—';
     var dl = m.downloads > 1e6 ? (m.downloads/1e6).toFixed(1)+'M' : m.downloads > 1000 ? (m.downloads/1000).toFixed(0)+'k' : m.downloads;
+    var hfLink = '<a href="https://huggingface.co/' + m.modelId + '" target="_blank" rel="noopener" title="View on HuggingFace" style="color:var(--text-3);opacity:.7;margin-left:6px;text-decoration:none;vertical-align:middle" aria-label="HuggingFace">' +
+      '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+      '</a>';
     return '<tr>' +
-      '<td class="mono-text" style="font-size:12px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + m.modelId + '">' + m.modelId + '</td>' +
+      '<td class="mono-text" style="font-size:12px;max-width:280px;white-space:nowrap" title="' + m.modelId + '">' +
+        '<span style="overflow:hidden;text-overflow:ellipsis;display:inline-block;max-width:230px;vertical-align:middle">' + m.modelId + '</span>' + hfLink +
+      '</td>' +
       '<td style="font-size:12px;color:var(--text-2)">' + paramsStr + '</td>' +
       '<td style="font-size:12px">' + ramRawGB(m.est_ram_gb||0) + '</td>' +
       '<td style="font-size:13px">' + ramFitBadge(m.est_ram_gb||0) + '</td>' +
@@ -1805,6 +1874,12 @@ function statCard(label, val) {
 
 // Load system info at startup for HF search RAM fitting
 fetch('/api/system').then(function(r) { return r.json(); }).then(function(d) { window._sysInfo = d; }).catch(function() {});
+
+// Restore section from URL hash on initial load
+(function() {
+  var hash = location.hash.replace('#', '');
+  if (hash && SECTIONS.includes(hash)) showSection(hash);
+})();
 </script>
 </body>
 </html>
