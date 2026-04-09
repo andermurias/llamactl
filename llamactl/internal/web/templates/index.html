@@ -840,6 +840,8 @@
                     </td>
                     <td style="text-align:right; white-space:nowrap">
                       <button class="btn btn-sm btn-default"
+                              onclick="testModel('{{.ID}}', this)" title="Send a test prompt and measure latency">Test</button>
+                      <button class="btn btn-sm btn-default"
                               onclick="modelAction('disable','{{.ID}}')">Disable</button>
                       <button class="btn btn-sm btn-danger"
                               onclick="modelRemove('{{.ID}}')">Remove</button>
@@ -2045,6 +2047,38 @@ function downloadConfig() {
     a.click();
     URL.revokeObjectURL(a.href);
   }).catch(function() { showToast('Error', 'error', 'Could not download config'); });
+}
+
+// ── Quick model test ──────────────────────────────────────────────────────────
+function testModel(modelId, btn) {
+  var origText = btn.textContent;
+  btn.textContent = '…';
+  btn.disabled = true;
+  var t0 = performance.now();
+  fetch('/v1/chat/completions', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{role: 'user', content: 'Reply with exactly: OK'}],
+      max_tokens: 8,
+      stream: false
+    })
+  }).then(function(r) {
+    var elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    btn.textContent = origText;
+    btn.disabled = false;
+    if (!r.ok) { showToast('Test failed', 'error', modelId + ' returned HTTP ' + r.status + ' (' + elapsed + 's)'); return; }
+    return r.json().then(function(d) {
+      var tokens = (d.usage && d.usage.completion_tokens) ? d.usage.completion_tokens : '?';
+      var tps = (tokens !== '?' && elapsed > 0) ? (tokens / parseFloat(elapsed)).toFixed(1) : '?';
+      showToast('✅ ' + modelId, 'success', elapsed + 's · ' + tokens + ' tokens · ' + tps + ' tok/s');
+    });
+  }).catch(function(e) {
+    btn.textContent = origText;
+    btn.disabled = false;
+    showToast('Test failed', 'error', e.message);
+  });
 }
 
 // Load system info at startup for HF search RAM fitting
