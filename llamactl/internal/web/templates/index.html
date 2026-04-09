@@ -451,14 +451,15 @@
 
 <!-- Versions panel modal -->
 <div class="modal-overlay" id="versions-overlay" onclick="if(event.target===this)closeVersionsPanel()" style="display:none">
-  <div class="modal" style="min-width:380px;max-width:520px">
+  <div class="modal" style="min-width:340px;max-width:480px;width:90vw">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div class="modal-title" style="margin-bottom:0">Component Versions</div>
       <button onclick="closeVersionsPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px" id="versions-table">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed" id="versions-table">
+      <colgroup><col style="width:42%"><col style="width:58%"></colgroup>
       <tbody id="versions-body">
         <tr><td colspan="2" style="color:var(--text-3);padding:20px;text-align:center">Loading…</td></tr>
       </tbody>
@@ -716,7 +717,43 @@
             {{end}}
           </dl>
         </div>
-      </div><!-- /sec-services -->
+
+        <!-- Currently loaded model -->
+        <div class="card" id="running-model-card" style="display:none">
+          <div class="card-header">
+            <span class="dot dot-green" style="animation:pulse 2s infinite"></span>
+            <span class="card-title">Loaded in Memory</span>
+            <div id="running-model-content" style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+          </div>
+        </div>
+
+        <!-- Quick links + memory usage -->
+        <div class="card">
+          <div class="card-header"><span class="card-title">Quick Links &amp; Resources</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px">
+            <a href="http://{{.LlamaSwap.APIAddr}}/v1/models" target="_blank" class="btn btn-sm btn-default">
+              📋 /v1/models
+            </a>
+            <a href="http://{{.LlamaSwap.APIAddr}}/running" target="_blank" class="btn btn-sm btn-default">
+              ⚡ /running
+            </a>
+            <a href="http://{{.LlamaSwap.APIAddr}}/v1/chat/completions" target="_blank" class="btn btn-sm btn-default">
+              💬 Chat API
+            </a>
+            <a href="http://{{.LlamaSwap.APIAddr}}/v1/embeddings" target="_blank" class="btn btn-sm btn-default">
+              🔢 Embeddings
+            </a>
+            {{if .ComfyUI.IsRunning}}
+            <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-sm btn-default">
+              🎨 ComfyUI
+            </a>
+            {{end}}
+          </div>
+          <div id="memory-usage-row" style="font-size:12px;color:var(--text-3);padding-top:4px;border-top:1px solid var(--border);margin-top:4px;display:none">
+            <span id="memory-usage-text"></span>
+          </div>
+        </div>
+        </div><!-- /sec-services -->
 
       <!-- ════════════════════════════════════════════════════════════════
            MODELS
@@ -773,6 +810,7 @@
                   <tr>
                     <th>Model</th>
                     <th>Backend</th>
+                    <th>Size</th>
                     <th>Status</th>
                     <th style="text-align:right">Actions</th>
                   </tr>
@@ -792,6 +830,7 @@
                         {{end}}
                       {{else}}<span class="badge badge-api">—</span>{{end}}
                     </td>
+                    <td id="file-size-{{.ID}}" style="font-size:11.5px;color:var(--text-3)">…</td>
                     <td>
                       {{if index $.Models.LoadedIDs .ID}}
                         <span class="badge badge-green">&#9679; loaded</span>
@@ -841,6 +880,24 @@
       <div id="sec-discover" class="section">
         <h1 class="section-title">Discover Models</h1>
         <p class="section-sub">Search HuggingFace and install directly into the stack.</p>
+
+        <!-- Curated recommended models (auto-loaded on open) -->
+        <div id="curated-card" class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+          <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:13px;font-weight:600">⭐ Recommended for your Mac</span>
+            <span id="curated-status" style="font-size:11.5px;color:var(--text-3)">Loading…</span>
+          </div>
+          <div class="table-wrap">
+            <table id="curated-table">
+              <thead>
+                <tr>
+                  <th>Model</th><th>Params</th><th>~RAM</th><th>Fit</th><th>Type</th><th style="text-align:right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="curated-body"></tbody>
+            </table>
+          </div>
+        </div>
 
         <!-- Search bar -->
         <div class="card" style="padding:20px">
@@ -1000,6 +1057,14 @@
             <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveConfig()" disabled>
               Save
             </button>
+            <button class="btn btn-default btn-sm" onclick="downloadConfig()" title="Download llama-swap.yaml">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download
+            </button>
             <span class="cfg-status muted" id="cfg-status"></span>
           </div>
           <!-- CodeMirror replaces this textarea on init -->
@@ -1058,6 +1123,9 @@ function showSection(name) {
     stopLogPolling();
   }
   if (name === 'config' && !configLoaded) loadConfig();
+  if (name === 'models' && !_modelFilesLoaded) loadModelFiles();
+  if (name === 'services') loadRunningModel();
+  if (name === 'discover' && !_discoverLoaded) { _discoverLoaded = true; loadCuratedModels(); }
 }
 
 // Restore section from URL hash on load / back-button navigation
@@ -1301,10 +1369,12 @@ function showVersionsPanel() {
     };
     var order = ['llamactl','llama_swap','llama_cpp','mlx_lm','mlx'];
     tbody.innerHTML = order.map(function(k) {
-      var val = d[k] || '—';
+      var raw = d[k] || '—';
+      // Truncate very long strings (like llama-swap build hash)
+      var short = raw.length > 50 ? raw.substring(0, 50) + '…' : raw;
       return '<tr style="border-bottom:1px solid var(--border)">' +
-        '<td style="padding:9px 12px;color:var(--text-3);white-space:nowrap;width:50%">' + (labels[k]||k) + '</td>' +
-        '<td style="padding:9px 12px;font-family:monospace;font-size:12.5px;color:var(--text)">' + val + '</td>' +
+        '<td style="padding:9px 12px;color:var(--text-3);white-space:nowrap">' + (labels[k]||k) + '</td>' +
+        '<td style="padding:9px 12px;font-family:monospace;font-size:12px;color:var(--text);overflow:hidden;word-break:break-all" title="' + raw.replace(/"/g,'&quot;') + '">' + short + '</td>' +
         '</tr>';
     }).join('');
   }).catch(function() {
@@ -1362,8 +1432,7 @@ function modelAction(action, modelID) {
           if (data.error) { showToast('Error', 'error', data.error); return; }
           showToast('"' + modelID + '" ' + action + 'd', 'success', 'Restart llama-swap to apply.');
           showRestartBanner();
-          htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
-            .then(function() { showSection('models'); loadDisabledModels(); });
+          setTimeout(function() { location.reload(); }, 400);
         })
         .catch(function(e) { showToast('Network error', 'error', e.message); });
       }}
@@ -1389,8 +1458,7 @@ function modelRemove(modelID) {
           if (data.error) { showToast('Error', 'error', data.error); return; }
           showToast('"' + modelID + '" removed', 'success', 'Restart llama-swap to apply.');
           showRestartBanner();
-          htmx.ajax('GET', '/', { target: 'body', swap: 'outerHTML' })
-            .then(function() { showSection('models'); });
+          setTimeout(function() { location.reload(); }, 400);
         })
         .catch(function(e) { showToast('Network error', 'error', e.message); });
       }}
@@ -1807,7 +1875,7 @@ function applyPreset(name) {
           if (d.error) { showToast('Error', 'error', d.error); return; }
           showToast('Preset applied', 'success', 'llama-swap restarting\u2026');
           setTimeout(function() {
-            htmx.ajax('GET', '/', {target: 'body', swap: 'outerHTML'}).then(function() { showSection('system'); });
+            setTimeout(function() { location.reload(); }, 3500);
           }, 3500);
         });
       }}
@@ -1870,6 +1938,113 @@ function statCard(label, val) {
     '<div style="font-size:22px;font-weight:700;color:var(--text)">' + val + '</div>' +
     '<div style="font-size:11.5px;color:var(--text-3);margin-top:2px">' + label + '</div>' +
     '</div>';
+}
+
+// ── Model files info ─────────────────────────────────────────────────────────
+var _modelFilesLoaded = false;
+function loadModelFiles() {
+  _modelFilesLoaded = true;
+  fetch('/api/models/files').then(function(r) { return r.json(); }).then(function(entries) {
+    entries.forEach(function(e) {
+      var cell = document.getElementById('file-size-' + e.model_id);
+      if (!cell) return;
+      if (e.exists && e.size_bytes > 0) {
+        var gb = (e.size_bytes / 1073741824).toFixed(1);
+        cell.textContent = gb + ' GB';
+        cell.title = e.path;
+        cell.style.color = '';
+      } else {
+        cell.textContent = '—';
+        cell.style.color = 'var(--red)';
+        cell.title = 'File not found';
+      }
+    });
+  }).catch(function() {});
+}
+
+// ── Running model + memory ────────────────────────────────────────────────────
+function loadRunningModel() {
+  fetch('/api/running').then(function(r) { return r.json(); }).then(function(d) {
+    var card = document.getElementById('running-model-card');
+    var content = document.getElementById('running-model-content');
+    if (!card || !content) return;
+    var models = Array.isArray(d) ? d : (d.running || d.models || []);
+    if (models.length > 0) {
+      card.style.display = '';
+      content.innerHTML = models.map(function(m) {
+        var id = typeof m === 'string' ? m : (m.id || m.name || JSON.stringify(m));
+        return '<span class="badge badge-green" style="font-size:13px">' + id + '</span>';
+      }).join(' ');
+    } else {
+      card.style.display = 'none';
+    }
+  }).catch(function() {
+    var card = document.getElementById('running-model-card');
+    if (card) card.style.display = 'none';
+  });
+  fetch('/api/memory').then(function(r) { return r.json(); }).then(function(d) {
+    var row = document.getElementById('memory-usage-row');
+    var text = document.getElementById('memory-usage-text');
+    if (!row || !text) return;
+    var parts = [];
+    if (d.llama_swap) parts.push('llama-swap: ' + (d.llama_swap / 1073741824).toFixed(1) + ' GB RSS');
+    if (parts.length > 0) { row.style.display = ''; text.textContent = '🧠 ' + parts.join(' · '); }
+    else { row.style.display = 'none'; }
+  }).catch(function() {});
+}
+
+// ── Curated recommended models ────────────────────────────────────────────────
+var _discoverLoaded = false;
+var CURATED_MODELS = [
+  {modelId:'mlx-community/gemma-3-12b-it-4bit', est_ram_gb:7, params_billion:12, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/gemma-4-e4b-it-6bit', est_ram_gb:6.6, params_billion:4, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/Qwen2.5-7B-Instruct-4bit', est_ram_gb:4.5, params_billion:7, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/Qwen2.5-14B-Instruct-4bit', est_ram_gb:8.5, params_billion:14, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/Qwen2.5-Coder-14B-Instruct-4bit', est_ram_gb:9, params_billion:14, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/Llama-3.2-3B-Instruct-4bit', est_ram_gb:2, params_billion:3, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/phi-4-4bit', est_ram_gb:8, params_billion:14, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/DeepSeek-R1-Distill-Qwen-7B-4bit', est_ram_gb:4.5, params_billion:7, pipeline_tag:'reasoning'},
+  {modelId:'mlx-community/Mistral-7B-Instruct-v0.3-4bit', est_ram_gb:4.2, params_billion:7, pipeline_tag:'text-generation'},
+  {modelId:'mlx-community/mistral-small-3.1-24B-Instruct-2503-4bit', est_ram_gb:14, params_billion:24, pipeline_tag:'text-generation'},
+  {modelId:'bartowski/Llama-3.2-11B-Vision-Instruct-GGUF', est_ram_gb:8, params_billion:11, pipeline_tag:'vision'},
+  {modelId:'nomic-ai/nomic-embed-text-v1.5-GGUF', est_ram_gb:0.3, params_billion:0.137, pipeline_tag:'embeddings'},
+];
+function loadCuratedModels() {
+  var tbody = document.getElementById('curated-body');
+  var statusEl = document.getElementById('curated-status');
+  if (!tbody) return;
+  var ram = window._sysInfo ? window._sysInfo.ram_gb : 16;
+  var fit = CURATED_MODELS.filter(function(m) { return m.est_ram_gb <= ram * 0.75; });
+  if (statusEl) statusEl.textContent = fit.length + ' fit your ' + Math.round(ram) + ' GB RAM';
+  tbody.innerHTML = fit.map(function(m) {
+    var p = m.params_billion;
+    var paramsStr = p >= 1 ? p.toFixed(1) + 'B' : (p * 1000).toFixed(0) + 'M';
+    return '<tr>' +
+      '<td class="mono-text" style="font-size:12px">' +
+        '<span style="display:inline-block;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="' + m.modelId + '">' + m.modelId + '</span>' +
+        '<a href="https://huggingface.co/' + m.modelId + '" target="_blank" rel="noopener" style="color:var(--text-3);opacity:.7;margin-left:5px;text-decoration:none;vertical-align:middle">' +
+          '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
+        '</a>' +
+      '</td>' +
+      '<td style="font-size:12px;color:var(--text-2)">' + paramsStr + '</td>' +
+      '<td style="font-size:12px">' + ramRawGB(m.est_ram_gb) + '</td>' +
+      '<td style="font-size:13px">' + ramFitBadge(m.est_ram_gb) + '</td>' +
+      '<td style="font-size:11.5px;color:var(--text-3)">' + (m.pipeline_tag || '') + '</td>' +
+      '<td style="text-align:right"><button class="btn btn-sm btn-primary" onclick="installModel(\'' + m.modelId + '\')">Install</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// ── Config download ───────────────────────────────────────────────────────────
+function downloadConfig() {
+  fetch('/api/config').then(function(r) { return r.json(); }).then(function(d) {
+    var blob = new Blob([d.content || ''], {type: 'text/yaml'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'llama-swap.yaml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }).catch(function() { showToast('Error', 'error', 'Could not download config'); });
 }
 
 // Load system info at startup for HF search RAM fitting

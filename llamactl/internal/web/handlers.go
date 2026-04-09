@@ -839,3 +839,146 @@ func (s *Server) handleVersions(w http.ResponseWriter, r *http.Request) {
 
 	jsonOK(w, ver)
 }
+
+// handleModelFiles returns file path and size for each registered model.
+// GET /api/models/files
+func (s *Server) handleModelFiles(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	type FileEntry struct {
+		ModelID  string `json:"model_id"`
+		Path     string `json:"path"`
+		SizeBytes int64  `json:"size_bytes"`
+		Exists   bool   `json:"exists"`
+		Backend  string `json:"backend"`
+	}
+
+	info := service.GetModelsInfo(s.cfg)
+	// Build a lookup: filename segment → path+size for GGUF files
+	ggufByName := make(map[string]struct{ path string; size int64 })
+	for _, f := range info.GGUFFiles {
+		ggufByName[strings.ToLower(filepath.Base(f.Path))] = struct{ path string; size int64 }{f.Path, f.Size}
+	}
+	// HF cache dir
+	hfCache := filepath.Join(os.Getenv("HOME"), ".cache", "huggingface", "hub")
+
+	var entries []FileEntry
+	for _, m := range info.APIModels {
+		meta := info.MetaMap[m.ID]
+		entry := FileEntry{ModelID: m.ID, Backend: meta.Backend}
+
+		switch meta.Backend {
+		case "GGUF":
+			// Match by model ID pattern in filename
+			for name, fi := range ggufByName {
+				if strings.Contains(name, strings.ToLower(strings.ReplaceAll(m.ID, "-", "_"))) ||
+					strings.Contains(name, strings.ToLower(m.ID)) {
+					entry.Path = fi.path
+					entry.SizeBytes = fi.size
+					entry.Exists = true
+					break
+				}
+			}
+			if entry.Path == "" {
+				// Try direct scan for any gguf matching model ID fragments
+				for _, f := range info.GGUFFiles {
+					lower := strings.ToLower(filepath.Base(f.Path))
+					parts := strings.Split(strings.ToLower(m.ID), "-")
+					match := 0
+					for _, p := range parts {
+						if len(p) > 2 && strings.Contains(lower, p) {
+							match++
+						}
+					}
+					if match >= 2 {
+						entry.Path = f.Path
+						entry.SizeBytes = f.Size
+						entry.Exists = true
+						break
+					}
+				}
+			}
+		case "MLX":
+			// Derive HF cache path from model ID
+			// E.g. gemma-3-12b-it-mlx → look in mlx-community/gemma-3-12b-it directories
+			baseID := strings.TrimSuffix(m.ID, "-mlx")
+			candidates := []string{
+				"mlx-community--" + baseID + "-4bit",
+				"mlx-community--" + baseID + "-8bit",
+				"mlx-community--" + baseID + "-6bit",
+				"mlx-community--" + baseID,
+			}
+			for _, cand := range candidates {
+				dir := filepath.Join(hfCache, "models--"+strings.ReplaceAll(cand, "/", "--"))
+				if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+					entry.Path = dir
+					// Get approx size
+					if sz, err := dirSizeApprox(dir); err == nil {
+						entry.SizeBytes = sz
+					}
+					entry.Exists = true
+					break
+				}
+			}
+		}
+		entries = append(entries, entry)
+	}
+	jsonOK(w, entries)
+}
+
+// dirSizeApprox returns the total byte size of a directory tree (best-effort).
+func dirSizeApprox(dir string) (int64, error) {
+	var total int64
+	err := filepath.WalkDir(dir, func(_ string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if info, err := d.Info(); err == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, err
+}
+
+// handleRunning proxies /running from llama-swap and returns loaded model info.
+// GET /api/running
+func (s *Server) handleRunning(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	// Proxy to llama-swap /running
+	resp, err := http.Get("http://" + s.cfg.Listen + "/running")
+	if err != nil {
+		jsonOK(w, map[string]any{"models": []string{}, "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	var result any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		jsonOK(w, map[string]any{"models": []string{}})
+		return
+	}
+	jsonOK(w, result)
+}
+
+// handleProcessMemory returns RSS memory usage in bytes for key services.
+// GET /api/memory
+func (s *Server) handleProcessMemory(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	result := map[string]int64{}
+	for _, name := range []string{"llama-swap", "llamactl"} {
+		if out, err := exec.Command("sh", "-c",
+			`ps -A -o comm=,rss= | awk '$1 ~ /`+name+`/ {sum += $2} END {print sum*1024}'`,
+		).Output(); err == nil {
+			if v, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64); err == nil {
+				result[strings.ReplaceAll(name, "-", "_")] = v
+			}
+		}
+	}
+	jsonOK(w, result)
+}
+

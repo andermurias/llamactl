@@ -73,6 +73,7 @@ func (s *Server) routes() {
 	// ── API: models + logs + config ───────────────────────────────────────
 	s.mux.HandleFunc("/api/models", s.handleModels)
 	s.mux.HandleFunc("/api/models/disabled", s.handleModelDisabledList)
+	s.mux.HandleFunc("/api/models/files", s.handleModelFiles)
 	s.mux.HandleFunc("/api/models/install", s.handleModelInstall)
 	s.mux.HandleFunc("/api/models/manage", s.handleModelManage)
 	s.mux.HandleFunc("/api/logs", s.handleLogs)
@@ -87,6 +88,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/action", s.handleAction)
 	s.mux.HandleFunc("/api/analytics", s.handleAnalytics)
 	s.mux.HandleFunc("/api/versions", s.handleVersions)
+	s.mux.HandleFunc("/api/running", s.handleRunning)
+	s.mux.HandleFunc("/api/memory", s.handleProcessMemory)
 
 	// ── API: config presets ───────────────────────────────────────────────
 	s.mux.HandleFunc("/api/presets", s.handlePresets)

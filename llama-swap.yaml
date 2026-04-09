@@ -38,20 +38,18 @@ groups:
         exclusive: false
         members:
             - gemma-3-12b-it
-            - gemma-3-12b-it-mlx
             - qwen3.5-9b
             - qwen2.5-3b
             - qwen2.5-7b
             - qwen2.5-coder-14b
             - qwen2.5-14b
             - phi-4
-            - qwen2.5-vl-7b
             - mistral-nemo-12b
-            - gpt-oss-20b-mxfp4-q8-mlx
             - qwen3.5-9b-mlx-mlx
             - gemma-3-12b-it-qat-mlx
             - gemma-4-e4b-it-6bit-mlx
             - gemma-4-e4b-it-gguf
+            - gemma-3-12b-it-mlx
 models:
     # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
     # --alias makes /v1/models report the same name clients use in requests.
@@ -85,22 +83,6 @@ models:
             --log-file /Users/andermurias/AI/logs/embeddings.log
         useModelName: "nomic-embed-text-v1.5"
         ttl: 60
-    # ── Chat · MLX — Gemma 3 12B (native Apple Silicon) ──────────────────────
-    # HF repo: mlx-community/gemma-3-12b-it-4bit  (~7 GB, downloads on first use)
-    gemma-3-12b-it-mlx:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/gemma-3-12b-it-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 32768
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 3221225472
-        useModelName: "mlx-community/gemma-3-12b-it-4bit"
-        concurrencyLimit: 1
-        ttl: 120
     # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
     # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
     # max-tokens is high because the <think>…</think> block alone can use
@@ -227,24 +209,6 @@ models:
         useModelName: "mlx-community/phi-4-4bit"
         concurrencyLimit: 1
         ttl: 120
-    # ── Vision · Qwen2.5 VL 7B (image + text → text) ─────────────────────────
-    # Multimodal chat: attach images to any message — OCR, screenshots, charts,
-    # document pages, photo analysis.
-    # llama-server downloads the model (~4.5 GB) AND mmproj automatically from
-    # HuggingFace on first use (stored in ~/.cache/huggingface/).
-    # OpenWebUI: select this model → image upload button appears automatically.
-    qwen2.5-vl-7b:
-        cmd: |
-            llama-server
-            --hf-repo ggml-org/Qwen2.5-VL-7B-Instruct-GGUF:q4_k_m
-            --alias qwen2.5-vl-7b
-            --host 127.0.0.1
-            --port ${PORT}
-            -ngl 99
-            --ctx-size 8192
-            --parallel 1
-        useModelName: "qwen2.5-vl-7b"
-        ttl: 300
     # ── Web search / RAG · MLX — Mistral Nemo 12B ────────────────────────────
     # Designed for RAG, web search synthesis and multilingual responses.
     # Handles long retrieved contexts well; strong instruction following.
@@ -315,20 +279,6 @@ models:
         useModelName: "kokoro"
         checkEndpoint: /health
         ttl: 120
-    gpt-oss-20b-mxfp4-q8-mlx:
-        cmd: |-
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/gpt-oss-20b-MXFP4-Q8
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 8192
-            --prefill-step-size 256
-            --prompt-cache-size 1
-        useModelName: "mlx-community/gpt-oss-20b-MXFP4-Q8"
-        checkEndpoint: "/health"
-        concurrencyLimit: 1
-        ttl: 300
     # ── Chat · MLX — Gemma 3 12B QAT (Quantization-Aware Training) ──────────
     # Same architecture as gemma-3-12b-it but trained with QAT — better quality
     # at 4-bit than post-training quantization. Recommended daily driver.
@@ -386,3 +336,16 @@ models:
         checkEndpoint: "/v1/models"
         concurrencyLimit: 1
         ttl: 180
+    gemma-3-12b-it-mlx:
+        cmd: |
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/gemma-3-12b-it-4bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 32768
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 3221225472
+        useModelName: "mlx-community/gemma-3-12b-it-4bit"
+        ttl: 120
