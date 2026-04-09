@@ -727,6 +727,16 @@
           </div>
         </div>
 
+        <!-- System Health -->
+        <div class="card" id="sys-health-card">
+          <div class="card-header"><span class="card-title">System Health</span>
+            <button class="btn btn-sm btn-default" style="margin-left:auto" onclick="loadRunningModel()">↻ Refresh</button>
+          </div>
+          <div id="sys-health-content" style="padding:4px 0 8px">
+            <div style="color:var(--text-3);font-size:12px">Loading…</div>
+          </div>
+        </div>
+
         <!-- Quick links + memory usage -->
         <div class="card">
           <div class="card-header"><span class="card-title">Quick Links &amp; Resources</span></div>
@@ -748,9 +758,6 @@
               🎨 ComfyUI
             </a>
             {{end}}
-          </div>
-          <div id="memory-usage-row" style="font-size:12px;color:var(--text-3);padding-top:4px;border-top:1px solid var(--border);margin-top:4px;display:none">
-            <span id="memory-usage-text"></span>
           </div>
         </div>
         </div><!-- /sec-services -->
@@ -1964,19 +1971,21 @@ function loadModelFiles() {
   }).catch(function() {});
 }
 
-// ── Running model + memory ────────────────────────────────────────────────────
+// ── Running model + system health ─────────────────────────────────────────────
 function loadRunningModel() {
+  // Running model card
   fetch('/api/running').then(function(r) { return r.json(); }).then(function(d) {
     var card = document.getElementById('running-model-card');
     var content = document.getElementById('running-model-content');
     if (!card || !content) return;
-    var models = Array.isArray(d) ? d : (d.running || d.models || []);
+    var models = Array.isArray(d) ? d : (d.running || []);
     if (models.length > 0) {
       card.style.display = '';
-      content.innerHTML = models.map(function(m) {
-        var id = typeof m === 'string' ? m : (m.id || m.name || JSON.stringify(m));
-        return '<span class="badge badge-green" style="font-size:13px">' + id + '</span>';
-      }).join(' ');
+      content.innerHTML = models.map(function(id) {
+        return '<span class="badge badge-green" style="font-size:13px">' + id + '</span>' +
+               '<button class="btn btn-sm btn-danger" style="padding:2px 8px" ' +
+               'onclick="unloadModel(\'' + id + '\', this)" title="Unload from memory">✕</button>';
+      }).join('');
     } else {
       card.style.display = 'none';
     }
@@ -1984,15 +1993,98 @@ function loadRunningModel() {
     var card = document.getElementById('running-model-card');
     if (card) card.style.display = 'none';
   });
-  fetch('/api/memory').then(function(r) { return r.json(); }).then(function(d) {
-    var row = document.getElementById('memory-usage-row');
-    var text = document.getElementById('memory-usage-text');
-    if (!row || !text) return;
-    var parts = [];
-    if (d.llama_swap) parts.push('llama-swap: ' + (d.llama_swap / 1073741824).toFixed(1) + ' GB RSS');
-    if (parts.length > 0) { row.style.display = ''; text.textContent = '🧠 ' + parts.join(' · '); }
-    else { row.style.display = 'none'; }
-  }).catch(function() {});
+
+  // System health card
+  Promise.all([
+    fetch('/api/system').then(function(r) { return r.json(); }),
+    fetch('/api/memory').then(function(r) { return r.json(); })
+  ]).then(function(results) {
+    var sys = results[0];
+    var mem = results[1];
+    window._sysInfo = sys;
+    var el = document.getElementById('sys-health-content');
+    if (!el) return;
+
+    function bar(usedBytes, totalBytes, color) {
+      var pct = totalBytes > 0 ? Math.round(usedBytes / totalBytes * 100) : 0;
+      return '<div style="background:var(--bg-2);border-radius:4px;height:8px;overflow:hidden;margin:4px 0 2px">' +
+             '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:4px;transition:width .4s"></div></div>';
+    }
+    function fmtGB(bytes) { return (bytes / 1073741824).toFixed(1) + ' GB'; }
+
+    var ramUsedPct = sys.mem_total > 0 ? Math.round(sys.mem_used / sys.mem_total * 100) : 0;
+    var ramColor = ramUsedPct > 85 ? 'var(--red)' : ramUsedPct > 65 ? 'var(--yellow)' : 'var(--green)';
+
+    var diskUsedPct = sys.disk_total > 0 ? Math.round(sys.disk_used / sys.disk_total * 100) : 0;
+    var diskColor = diskUsedPct > 90 ? 'var(--red)' : diskUsedPct > 75 ? 'var(--yellow)' : 'var(--blue)';
+
+    var cpuPct = sys.cpu_cores > 0 ? Math.min(100, Math.round(sys.cpu_load_avg_1 / sys.cpu_cores * 100)) : 0;
+    var cpuColor = cpuPct > 80 ? 'var(--red)' : cpuPct > 50 ? 'var(--yellow)' : 'var(--purple,#8b5cf6)';
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">';
+
+    // RAM
+    html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
+            '<span style="color:var(--text-2)">🧠 RAM</span>' +
+            '<span style="color:' + ramColor + '">' + fmtGB(sys.mem_used) + ' / ' + fmtGB(sys.mem_total) + ' (' + ramUsedPct + '%)</span></div>' +
+            bar(sys.mem_used, sys.mem_total, ramColor) +
+            '<div style="font-size:11px;color:var(--text-3)">' + fmtGB(sys.mem_available) + ' available</div></div>';
+
+    // Disk
+    if (sys.disk_total > 0) {
+      html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
+              '<span style="color:var(--text-2)">💾 Disk</span>' +
+              '<span style="color:' + diskColor + '">' + fmtGB(sys.disk_used) + ' / ' + fmtGB(sys.disk_total) + ' (' + diskUsedPct + '%)</span></div>' +
+              bar(sys.disk_used, sys.disk_total, diskColor) +
+              '<div style="font-size:11px;color:var(--text-3)">' + fmtGB(sys.disk_avail) + ' free</div></div>';
+    }
+
+    // CPU
+    html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
+            '<span style="color:var(--text-2)">⚡ CPU</span>' +
+            '<span style="color:' + cpuColor + '">Load ' + (sys.cpu_load_avg_1||0).toFixed(2) + ' / ' + sys.cpu_cores + ' cores</span></div>' +
+            bar(cpuPct, 100, cpuColor) +
+            '<div style="font-size:11px;color:var(--text-3)">' + cpuPct + '% utilization (1-min avg)</div></div>';
+
+    html += '</div>';
+
+    // Model/cache dirs
+    if (sys.models_dir_gb > 0 || sys.hf_cache_gb > 0) {
+      html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);' +
+              'display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--text-2)">';
+      if (sys.models_dir_gb > 0) html += '<span>📁 Models dir: <b>' + sys.models_dir_gb.toFixed(1) + ' GB</b></span>';
+      if (sys.hf_cache_gb > 0)   html += '<span>🤗 HF cache: <b>' + sys.hf_cache_gb.toFixed(1) + ' GB</b></span>';
+      html += '</div>';
+    }
+
+    // Per-process memory
+    var procParts = [];
+    if (mem.llama_swap > 0) procParts.push('llama-swap: ' + fmtGB(mem.llama_swap));
+    if (mem.mlx_lm > 0)     procParts.push('mlx_lm: ' + fmtGB(mem.mlx_lm));
+    if (mem.llama_cpp > 0)  procParts.push('llama-server: ' + fmtGB(mem.llama_cpp));
+    if (mem.llamactl > 0)   procParts.push('llamactl: ' + fmtGB(mem.llamactl));
+    if (procParts.length > 0) {
+      html += '<div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">Process RSS: ' + procParts.join(' · ') + '</div>';
+    }
+
+    el.innerHTML = html;
+  }).catch(function(e) {
+    var el = document.getElementById('sys-health-content');
+    if (el) el.innerHTML = '<span style="color:var(--text-3);font-size:12px">Could not load system info</span>';
+  });
+}
+
+function unloadModel(modelId, btn) {
+  btn.disabled = true;
+  fetch('/api/unload?model=' + encodeURIComponent(modelId), {method: 'DELETE'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      showToast('Unloaded', 'success', modelId + ' removed from memory');
+      setTimeout(loadRunningModel, 500);
+    }).catch(function(e) {
+      btn.disabled = false;
+      showToast('Error', 'error', 'Could not unload ' + modelId);
+    });
 }
 
 // ── Curated recommended models ────────────────────────────────────────────────
@@ -2015,7 +2107,7 @@ function loadCuratedModels() {
   var tbody = document.getElementById('curated-body');
   var statusEl = document.getElementById('curated-status');
   if (!tbody) return;
-  var ram = window._sysInfo ? window._sysInfo.ram_gb : 16;
+  var ram = window._sysInfo ? window._sysInfo.mem_total / 1073741824 : 16;
   var fit = CURATED_MODELS.filter(function(m) { return m.est_ram_gb <= ram * 0.75; });
   if (statusEl) statusEl.textContent = fit.length + ' fit your ' + Math.round(ram) + ' GB RAM';
   tbody.innerHTML = fit.map(function(m) {

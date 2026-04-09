@@ -5,18 +5,27 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // Info holds system resource metrics.
 type Info struct {
-	MemTotal     uint64 `json:"mem_total"`     // bytes — from sysctl hw.memsize
-	MemAvailable uint64 `json:"mem_available"` // bytes — free+inactive+speculative pages * 16384
-	MemUsed      uint64 `json:"mem_used"`      // bytes
-	Mem75Pct     uint64 `json:"mem_75pct"`     // 75% of total
-	CPUCores     int    `json:"cpu_cores"`     // sysctl hw.physicalcpu
+	MemTotal     uint64  `json:"mem_total"`     // bytes — from sysctl hw.memsize
+	MemAvailable uint64  `json:"mem_available"` // bytes — free+inactive+speculative pages * 16384
+	MemUsed      uint64  `json:"mem_used"`      // bytes
+	Mem75Pct     uint64  `json:"mem_75pct"`     // 75% of total
+	CPUCores     int     `json:"cpu_cores"`     // sysctl hw.physicalcpu
+	CPULoadAvg1  float64 `json:"cpu_load_avg_1"` // 1-minute load average
+	DiskTotal    uint64  `json:"disk_total"`    // bytes — home filesystem
+	DiskAvail    uint64  `json:"disk_avail"`    // bytes
+	DiskUsed     uint64  `json:"disk_used"`     // bytes
+	ModelsDirGB  float64 `json:"models_dir_gb"` // ~/AI/models approximate size
+	HFCacheGB    float64 `json:"hf_cache_gb"`   // ~/.cache/huggingface approximate size
 }
 
 const pageSize = 16384 // macOS default page size (16 KB on Apple Silicon)
@@ -43,13 +52,36 @@ func Get() (*Info, error) {
 		memAvail = memTotal
 	}
 
-	return &Info{
+	info := &Info{
 		MemTotal:     memTotal,
 		MemAvailable: memAvail,
 		MemUsed:      memTotal - memAvail,
 		Mem75Pct:     memTotal * 3 / 4,
 		CPUCores:     cpuCores,
-	}, nil
+	}
+
+	// Load average (best-effort)
+	if la, err := loadAvg1(); err == nil {
+		info.CPULoadAvg1 = la
+	}
+
+	// Disk usage for home filesystem (best-effort)
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "/"
+	}
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(home, &st); err == nil {
+		info.DiskTotal = st.Blocks * uint64(st.Bsize)
+		info.DiskAvail = st.Bavail * uint64(st.Bsize)
+		info.DiskUsed = info.DiskTotal - st.Bfree*uint64(st.Bsize)
+	}
+
+	// Approximate sizes for models directories (best-effort, fast du)
+	info.ModelsDirGB = dirGBFast(filepath.Join(home, "AI", "models"))
+	info.HFCacheGB = dirGBFast(filepath.Join(home, ".cache", "huggingface"))
+
+	return info, nil
 }
 
 func sysctlUint64(key string) (uint64, error) {
@@ -106,4 +138,40 @@ func vmStatPages() (free, inactive, speculative uint64, err error) {
 		}
 	}
 	return free, inactive, speculative, scanner.Err()
+}
+
+// loadAvg1 reads the 1-minute load average from sysctl vm.loadavg.
+func loadAvg1() (float64, error) {
+	// vm.loadavg output: "{ 1.23 2.34 3.45 }"
+	out, err := exec.Command("/usr/sbin/sysctl", "-n", "vm.loadavg").Output()
+	if err != nil {
+		return 0, err
+	}
+	s := strings.Trim(strings.TrimSpace(string(out)), "{} ")
+	parts := strings.Fields(s)
+	if len(parts) < 1 {
+		return 0, fmt.Errorf("unexpected vm.loadavg output")
+	}
+	return strconv.ParseFloat(parts[0], 64)
+}
+
+// dirGBFast returns the approximate size in GB of a directory using `du -sk`.
+// Returns 0 on error or if the directory does not exist.
+func dirGBFast(dir string) float64 {
+	if _, err := os.Stat(dir); err != nil {
+		return 0
+	}
+	out, err := exec.Command("/usr/bin/du", "-sk", dir).Output()
+	if err != nil {
+		return 0
+	}
+	parts := strings.Fields(string(out))
+	if len(parts) < 1 {
+		return 0
+	}
+	kb, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return 0
+	}
+	return kb / (1024 * 1024) // KB → GB
 }

@@ -942,25 +942,99 @@ func dirSizeApprox(dir string) (int64, error) {
 	return total, err
 }
 
-// handleRunning proxies /running from llama-swap and returns loaded model info.
+// handleRunning proxies /running from llama-swap and normalizes the response
+// to always return {"running": ["model-id-1", ...]} with just model name strings.
 // GET /api/running
 func (s *Server) handleRunning(w http.ResponseWriter, r *http.Request) {
 	if !getOnly(w, r) {
 		return
 	}
-	// Proxy to llama-swap /running
+	empty := map[string]any{"running": []string{}}
 	resp, err := http.Get("http://" + s.cfg.Listen + "/running")
 	if err != nil {
-		jsonOK(w, map[string]any{"models": []string{}, "error": err.Error()})
+		jsonOK(w, empty)
 		return
 	}
 	defer resp.Body.Close()
-	var result any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		jsonOK(w, map[string]any{"models": []string{}})
+
+	var raw any
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		jsonOK(w, empty)
 		return
 	}
-	jsonOK(w, result)
+
+	// Normalize to a []string of model IDs from whatever llama-swap returns.
+	// Supported shapes:
+	//   {"running": ["id1", ...]}           — array of strings
+	//   {"running": [{"id": "id1", ...}]}   — array of objects with id field
+	//   {"id1": {...}, "id2": {...}}         — top-level map, keys are model IDs
+	ids := []string{}
+	switch v := raw.(type) {
+	case map[string]any:
+		if arr, ok := v["running"]; ok {
+			ids = extractModelIDs(arr)
+		} else {
+			// Top-level map: keys are model IDs
+			for k := range v {
+				ids = append(ids, k)
+			}
+		}
+	case []any:
+		ids = extractModelIDs(raw)
+	}
+	jsonOK(w, map[string]any{"running": ids})
+}
+
+// extractModelIDs normalizes a JSON value (array of strings or objects) into a []string.
+func extractModelIDs(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	ids := []string{}
+	for _, item := range arr {
+		switch s := item.(type) {
+		case string:
+			ids = append(ids, s)
+		case map[string]any:
+			// Try common ID field names
+			for _, field := range []string{"id", "model", "name", "model_id"} {
+				if val, ok := s[field].(string); ok && val != "" {
+					ids = append(ids, val)
+					break
+				}
+			}
+		}
+	}
+	return ids
+}
+
+// handleUnload stops a specific model in llama-swap.
+// DELETE /api/unload?model=<id>
+func (s *Server) handleUnload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	modelID := r.URL.Query().Get("model")
+	if modelID == "" {
+		jsonErr(w, http.StatusBadRequest, "model parameter required")
+		return
+	}
+	url := "http://" + s.cfg.Listen + "/running/" + modelID
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		jsonErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+	jsonOK(w, map[string]any{"ok": true, "status": resp.StatusCode})
 }
 
 // handleProcessMemory returns RSS memory usage in bytes for key services.
@@ -969,14 +1043,28 @@ func (s *Server) handleProcessMemory(w http.ResponseWriter, r *http.Request) {
 	if !getOnly(w, r) {
 		return
 	}
+	// Processes to measure: friendly-name → partial process name to match
+	procs := map[string]string{
+		"llama_swap": "llama-swap",
+		"llamactl":   "llamactl",
+		"mlx_lm":     "mlx_lm",
+		"llama_cpp":  "llama-server",
+	}
 	result := map[string]int64{}
-	for _, name := range []string{"llama-swap", "llamactl"} {
-		if out, err := exec.Command("sh", "-c",
-			`ps -A -o comm=,rss= | awk '$1 ~ /`+name+`/ {sum += $2} END {print sum*1024}'`,
-		).Output(); err == nil {
-			if v, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64); err == nil {
-				result[strings.ReplaceAll(name, "-", "_")] = v
-			}
+	for key, name := range procs {
+		// Use full command line (args) to match — comm field is truncated on macOS
+		out, err := exec.Command("sh", "-c",
+			`ps -A -o rss=,command= | awk '{cmd=$2; sub(".*/","",cmd); if(cmd~/`+name+`/) sum+=$1} END{if(sum>0) print sum*1024}'`,
+		).Output()
+		if err != nil {
+			continue
+		}
+		sv := strings.TrimSpace(string(out))
+		if sv == "" {
+			continue
+		}
+		if v, err := strconv.ParseInt(sv, 10, 64); err == nil && v > 0 {
+			result[key] = v
 		}
 	}
 	jsonOK(w, result)
