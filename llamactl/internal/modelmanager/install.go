@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/andermurias/llamactl/internal/modelconfig"
 )
 
 const (
@@ -152,13 +154,15 @@ func (ins *Installer) installMLX(req InstallRequest, progress func(string)) (*In
 
 	progress(fmt.Sprintf("✓ Added %q to llama-swap.yaml (MLX — model will download on first use)", req.ModelID))
 
-	return &InstallResult{
+	result := &InstallResult{
 		ModelID:    req.ModelID,
 		Type:       ModelTypeMLX,
 		HFID:       mlxHFID,
 		ConfigPath: ins.ConfigFile,
 		Message:    fmt.Sprintf("MLX model configured. Run 'llamactl restart' then call the model to trigger download (~%.0f GB).", float64(estimateMLXSize(mlxHFID))),
-	}, nil
+	}
+	go cacheInstallMeta(result)
+	return result, nil
 }
 
 // ── GGUF install ──────────────────────────────────────────────────────────────
@@ -238,14 +242,16 @@ func (ins *Installer) installGGUF(req InstallRequest, progress func(string)) (*I
 
 	progress(fmt.Sprintf("✓ Added %q to llama-swap.yaml (GGUF)", req.ModelID))
 
-	return &InstallResult{
+	result := &InstallResult{
 		ModelID:    req.ModelID,
 		Type:       ModelTypeGGUF,
 		HFID:       req.HFID,
 		FilePath:   destPath,
 		ConfigPath: ins.ConfigFile,
 		Message:    fmt.Sprintf("GGUF model installed. Run 'llamactl restart' to apply."),
-	}, nil
+	}
+	go cacheInstallMeta(result)
+	return result, nil
 }
 
 // downloadGGUF uses huggingface-cli to download a single GGUF file.
@@ -315,4 +321,49 @@ func estimateMLXSize(hfID string) float64 {
 		return 40
 	}
 	return 5 // fallback estimate
+}
+
+// cacheInstallMeta reads model architecture metadata from the installed file
+// and saves it to ~/AI/llamactl-model-meta.yaml so the Configure panel works
+// immediately after install without a second read on first open.
+// Runs in a goroutine — errors are silently ignored (handler falls back to
+// on-demand reading).
+func cacheInstallMeta(res *InstallResult) {
+	meta := modelconfig.ModelMeta{
+		ModelID: res.ModelID,
+		Backend: backendNameForType(res.Type),
+	}
+	switch res.Type {
+	case ModelTypeGGUF:
+		if ggufMeta, err := modelconfig.ReadGGUFMeta(res.FilePath); err == nil {
+			if info, err := os.Stat(res.FilePath); err == nil {
+				meta.FileSizeBytes = info.Size()
+			}
+			meta.NumLayers  = ggufMeta.NumLayers
+			meta.NumHeads   = ggufMeta.NumHeads
+			meta.NumKVHeads = ggufMeta.NumKVHeads
+			meta.HiddenSize = ggufMeta.HiddenSize
+			meta.MaxContext = ggufMeta.MaxContext
+		}
+	case ModelTypeMLX:
+		if ggufMeta, err := modelconfig.ReadMLXMeta(res.HFID); err == nil {
+			meta.NumLayers  = ggufMeta.NumLayers
+			meta.NumHeads   = ggufMeta.NumHeads
+			meta.NumKVHeads = ggufMeta.NumKVHeads
+			meta.HiddenSize = ggufMeta.HiddenSize
+			meta.MaxContext = ggufMeta.MaxContext
+		}
+	}
+	_ = modelconfig.UpsertMeta("", meta)
+}
+
+func backendNameForType(t ModelType) string {
+	switch t {
+	case ModelTypeMLX:
+		return "mlxlm"
+	case ModelTypeGGUF:
+		return "llamaserver"
+	default:
+		return ""
+	}
 }
