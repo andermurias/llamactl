@@ -12,26 +12,32 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
   <!-- js-yaml — YAML validation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@0.379.0/dist/umd/lucide.min.js" defer></script>
+  <!-- Fonts: Manrope (UI) + JetBrains Mono (code/metrics) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     /* ── Design tokens ──────────────────────────────────────────────────── */
     :root {
-      --bg:        #0f0f10;
-      --surface:   #1c1c1e;
-      --surface2:  #252528;
-      --border:    #2c2c2e;
-      --border2:   #3a3a3c;
-      --text:      #f5f5f7;
-      --text-2:    #98989f;
-      --text-3:    #636366;
-      --green:     #30d158;
-      --green-bg:  rgba(48,209,88,.12);
-      --red:       #ff453a;
-      --red-bg:    rgba(255,69,58,.12);
-      --yellow:    #ffd60a;
-      --yellow-bg: rgba(255,214,10,.12);
-      --blue:      #0a84ff;
-      --blue-bg:   rgba(10,132,255,.12);
-      --sidebar-w: 240px;
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --border2:   #3d444d;
+      --text:      #e6edf3;
+      --text-2:    #8d96a0;
+      --text-3:    #545d68;
+      --green:     #3fb950;
+      --green-bg:  rgba(63,185,80,.12);
+      --red:       #f85149;
+      --red-bg:    rgba(248,81,73,.12);
+      --yellow:    #d29922;
+      --yellow-bg: rgba(210,153,34,.12);
+      --blue:      #2f81f7;
+      --blue-bg:   rgba(47,129,247,.12);
+      --sidebar-w: 232px;
       --header-h:  52px;
     }
 
@@ -41,7 +47,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 14px;
       line-height: 1.5;
       min-height: 100dvh;
@@ -121,9 +127,22 @@
       margin-bottom: 1px;
     }
     .nav-item:hover { background: var(--surface2); color: var(--text); }
-    .nav-item.active { background: var(--surface2); color: var(--text); font-weight: 600; }
+    .nav-item.active {
+      background: var(--surface2); color: var(--text); font-weight: 600;
+      position: relative;
+    }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 5px; bottom: 5px;
+      width: 2px;
+      background: var(--blue);
+      border-radius: 1px;
+    }
     .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: .6; }
     .nav-item.active svg { opacity: 1; }
+    .nav-item i[data-lucide] { width: 15px; height: 15px; flex-shrink: 0; opacity: .6; }
+    .nav-item.active i[data-lucide] { opacity: 1; }
     .nav-count {
       margin-left: auto;
       font-size: 10.5px; font-weight: 600; color: var(--text-3);
@@ -238,7 +257,7 @@
     .info-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 18px; }
     .info-dl dt { color: var(--text-3); font-size: 12px; white-space: nowrap; padding: 2px 0; }
     .info-dl dd { font-size: 12px; color: var(--text-2); padding: 2px 0; }
-    code { font-family: ui-monospace,'Cascadia Code',monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+    code { font-family: 'JetBrains Mono',ui-monospace,'Cascadia Code',monospace; font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
 
     hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 
@@ -249,11 +268,11 @@
     tbody td { padding: 10px 16px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
     tbody tr:last-child td { border-bottom: none; }
     tbody tr:hover td { background: rgba(255,255,255,.018); }
-    .mono-text { font-family: ui-monospace,'Cascadia Code',monospace; font-size: 11px; color: var(--text-2); word-break: break-all; }
+    .mono-text { font-family: 'JetBrains Mono',ui-monospace,'Cascadia Code',monospace; font-size: 11px; color: var(--text-2); word-break: break-all; }
 
     /* ── Log box ────────────────────────────────────────────────────────── */
     .log-box {
-      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-family: 'JetBrains Mono',ui-monospace,'Cascadia Code',monospace;
       font-size: 11.5px; line-height: 1.65;
       background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
       padding: 12px 14px; overflow-y: auto; max-height: 58vh;
@@ -285,7 +304,7 @@
 
     /* ── Code editor ────────────────────────────────────────────────────── */
     .code-editor {
-      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-family: 'JetBrains Mono',ui-monospace,'Cascadia Code',monospace;
       font-size: 12px; line-height: 1.65;
       background: var(--bg); color: var(--text-2);
       border: 1px solid var(--border); border-radius: 8px;
@@ -302,13 +321,13 @@
       font-size: 12.5px; line-height: 1.65;
       height: 52vh; border-radius: 8px;
       border: 1px solid var(--border);
-      background: #1c1c1e !important;
+      background: #161b22 !important;
       transition: border-color .15s;
     }
     .CodeMirror:hover { border-color: var(--border2); }
     .CodeMirror-focused { border-color: var(--border2) !important; }
     .CodeMirror-scroll { padding-bottom: 20px; }
-    .CodeMirror-gutters { background: #1c1c1e !important; border-right: 1px solid var(--border) !important; }
+    .CodeMirror-gutters { background: #161b22 !important; border-right: 1px solid var(--border) !important; }
     .CodeMirror-linenumber { color: var(--text-3) !important; font-size: 11px; }
     .CodeMirror-cursor { border-left-color: var(--text) !important; }
     /* YAML error line highlight */
@@ -418,7 +437,7 @@
     }
     .test-input:focus { border-color: var(--border2); }
     .test-output {
-      font-family: ui-monospace,'Cascadia Code',monospace;
+      font-family: 'JetBrains Mono',ui-monospace,'Cascadia Code',monospace;
       font-size: 12px; line-height: 1.65; color: var(--text-2);
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 8px; padding: 12px 14px;
@@ -480,7 +499,14 @@
     <!-- Brand + service status -->
     <div class="sidebar-header">
       <div class="sidebar-brand">
-        <div class="sidebar-icon">🦙</div>
+        <div class="sidebar-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17">
+            <rect x="2" y="2" width="9" height="9" rx="1.5"/>
+            <rect x="13" y="2" width="9" height="9" rx="1.5"/>
+            <rect x="2" y="13" width="9" height="9" rx="1.5"/>
+            <rect x="13" y="13" width="9" height="9" rx="1.5"/>
+          </svg>
+        </div>
         <div>
           <div class="sidebar-name">llamactl</div>
           <div class="sidebar-sub">Local AI Stack</div>
@@ -555,19 +581,12 @@
     <div class="sidebar-footer">
       <button class="nav-item" style="color:var(--text-3);font-size:12px"
               onclick="location.reload()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
+        <i data-lucide="refresh-cw" style="width:14px;height:14px;flex-shrink:0;opacity:.6"></i>
         Refresh
       </button>
       <button class="nav-item" style="color:var(--text-3);font-size:12px"
               onclick="showVersionsPanel()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
+        <i data-lucide="info" style="width:14px;height:14px;flex-shrink:0;opacity:.6"></i>
         About
       </button>
     </div>
@@ -587,7 +606,7 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <span class="topbar-brand">🦙 llamactl</span>
+      <span class="topbar-brand">llamactl</span>
       <span class="badge {{if .LlamaSwap.IsRunning}}badge-green{{else}}badge-gray{{end}}">
         {{if .LlamaSwap.IsRunning}}Running{{else}}Offline{{end}}
       </span>
@@ -730,7 +749,7 @@
         <!-- System Health -->
         <div class="card" id="sys-health-card">
           <div class="card-header"><span class="card-title">System Health</span>
-            <button class="btn btn-sm btn-default" style="margin-left:auto" onclick="loadRunningModel()">↻ Refresh</button>
+            <button class="btn btn-sm btn-default" style="margin-left:auto" onclick="loadRunningModel()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
           </div>
           <div id="sys-health-content" style="padding:4px 0 8px">
             <div style="color:var(--text-3);font-size:12px">Loading…</div>
@@ -742,20 +761,20 @@
           <div class="card-header"><span class="card-title">Quick Links &amp; Resources</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px">
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/models" target="_blank" class="btn btn-sm btn-default">
-              📋 /v1/models
+              <i data-lucide="list" style="width:12px;height:12px"></i> /v1/models
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/running" target="_blank" class="btn btn-sm btn-default">
-              ⚡ /running
+              <i data-lucide="zap" style="width:12px;height:12px"></i> /running
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/chat/completions" target="_blank" class="btn btn-sm btn-default">
-              💬 Chat API
+              <i data-lucide="message-square" style="width:12px;height:12px"></i> Chat API
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/embeddings" target="_blank" class="btn btn-sm btn-default">
-              🔢 Embeddings
+              <i data-lucide="hash" style="width:12px;height:12px"></i> Embeddings
             </a>
             {{if .ComfyUI.IsRunning}}
             <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-sm btn-default">
-              🎨 ComfyUI
+              <i data-lucide="image" style="width:12px;height:12px"></i> ComfyUI
             </a>
             {{end}}
           </div>
@@ -772,7 +791,7 @@
         <!-- Restart banner (shown after config changes) -->
         <div class="restart-banner" id="restart-banner">
           <span class="restart-banner-msg">
-            ⚠️ Pending restart
+            <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:middle;margin-right:5px"></i>Pending restart
             <span class="restart-banner-sub">Model config changed — restart llama-swap to apply.</span>
           </span>
           <button class="btn btn-sm btn-default" onclick="dismissRestartBanner()">Later</button>
@@ -787,7 +806,7 @@
               <select id="test-model" style="padding:6px 10px; background:var(--bg-2,var(--surface2)); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px">
                 {{range .Models.APIModels}}<option value="{{.ID}}">{{.ID}}</option>{{end}}
               </select>
-              <button class="btn btn-sm btn-default" onclick="closeTestDrawer()">✕</button>
+              <button class="btn btn-sm btn-default" onclick="closeTestDrawer()"><i data-lucide="x" style="width:12px;height:12px"></i></button>
             </div>
           </div>
           <textarea id="test-prompt" class="test-input" rows="2" placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
@@ -849,7 +868,7 @@
                       <button class="btn btn-sm btn-default"
                               onclick="testModel('{{.ID}}', this)" title="Send a test prompt and measure latency">Test</button>
                       <button class="btn btn-sm btn-default"
-                              onclick="openConfigurePanel('{{.ID}}')" title="Configure model parameters">⚙ Configure</button>
+                              onclick="openConfigurePanel('{{.ID}}')" title="Configure model parameters"><i data-lucide="sliders-horizontal" style="width:12px;height:12px"></i> Configure</button>
                       <button class="btn btn-sm btn-default"
                               onclick="modelAction('disable','{{.ID}}')">Disable</button>
                       <button class="btn btn-sm btn-danger"
@@ -895,7 +914,7 @@
         <!-- Curated recommended models (auto-loaded on open) -->
         <div id="curated-card" class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
           <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <span style="font-size:13px;font-weight:600">⭐ Recommended for your Mac</span>
+            <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px"><i data-lucide="star" style="width:14px;height:14px;color:var(--yellow)"></i> Recommended for your Mac</span>
             <span id="curated-status" style="font-size:11.5px;color:var(--text-3)">Loading…</span>
           </div>
           <div class="table-wrap">
@@ -1043,7 +1062,7 @@
         <div class="card" style="padding:20px; margin-top:10px">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
             <span style="font-size:13px; font-weight:600">Memory</span>
-            <button class="btn btn-sm btn-default" onclick="loadSystemInfo()">↻ Refresh</button>
+            <button class="btn btn-sm btn-default" onclick="loadSystemInfo()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
           </div>
           <div id="sys-ram-bars" style="display:flex; flex-direction:column; gap:8px">
             <span style="font-size:12px; color:var(--text-3)">Loading…</span>
@@ -1063,7 +1082,7 @@
         <div class="card" style="padding:20px; margin-top:10px">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
             <span style="font-size:13px; font-weight:600">AI Stack Processes</span>
-            <button class="btn btn-sm btn-default" onclick="loadProcesses()">↻ Refresh</button>
+            <button class="btn btn-sm btn-default" onclick="loadProcesses()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
           </div>
           <div id="sys-processes">
             <span style="font-size:12px; color:var(--text-3)">Loading…</span>
@@ -1167,9 +1186,10 @@ function showSection(name) {
     document.getElementById('nav-' + s).classList.toggle('active', s === name);
   });
   activeSection = name;
-  // Update URL hash so the page can be refreshed/bookmarked
   history.replaceState(null, '', '#' + name);
   closeSidebar();
+  // Close configure panel when navigating away from models
+  if (name !== 'models') closeConfigurePanel();
 
   if (name === 'logs') {
     if (currentSvc) startLogPolling(currentSvc);
@@ -1345,7 +1365,7 @@ document.body.addEventListener('refresh', function() {
 // ── Toast system ─────────────────────────────────────────────────────────────
 
 function showToast(msg, type, detail) {
-  var icons = { success: '✓', error: '✕', info: 'ℹ', warn: '⚠' };
+  var icons = { success: '✓', error: '✕', info: 'i', warn: '!' };
   var tc = document.getElementById('toast-container');
   if (!tc) return;
   var t = document.createElement('div');
@@ -2197,7 +2217,7 @@ function loadRunningModel() {
       content.innerHTML = models.map(function(id) {
         return '<span class="badge badge-green" style="font-size:13px">' + id + '</span>' +
                '<button class="btn btn-sm btn-danger" style="padding:2px 8px" ' +
-               'onclick="unloadModel(\'' + id + '\', this)" title="Unload from memory">✕</button>';
+               'onclick="unloadModel(\'' + id + '\', this)" title="Unload from memory">Unload</button>';
       }).join('');
     } else {
       card.style.display = 'none';
@@ -2238,7 +2258,7 @@ function loadRunningModel() {
 
     // RAM
     html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
-            '<span style="color:var(--text-2)">🧠 RAM</span>' +
+            '<span style="color:var(--text-2)">RAM</span>' +
             '<span style="color:' + ramColor + '">' + fmtGB(sys.mem_used) + ' / ' + fmtGB(sys.mem_total) + ' (' + ramUsedPct + '%)</span></div>' +
             bar(sys.mem_used, sys.mem_total, ramColor) +
             '<div style="font-size:11px;color:var(--text-3)">' + fmtGB(sys.mem_available) + ' available</div></div>';
@@ -2246,7 +2266,7 @@ function loadRunningModel() {
     // Disk
     if (sys.disk_total > 0) {
       html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
-              '<span style="color:var(--text-2)">💾 Disk</span>' +
+              '<span style="color:var(--text-2)">Disk</span>' +
               '<span style="color:' + diskColor + '">' + fmtGB(sys.disk_used) + ' / ' + fmtGB(sys.disk_total) + ' (' + diskUsedPct + '%)</span></div>' +
               bar(sys.disk_used, sys.disk_total, diskColor) +
               '<div style="font-size:11px;color:var(--text-3)">' + fmtGB(sys.disk_avail) + ' free</div></div>';
@@ -2254,7 +2274,7 @@ function loadRunningModel() {
 
     // CPU
     html += '<div><div style="display:flex;justify-content:space-between;font-size:12px">' +
-            '<span style="color:var(--text-2)">⚡ CPU</span>' +
+            '<span style="color:var(--text-2)">CPU</span>' +
             '<span style="color:' + cpuColor + '">Load ' + (sys.cpu_load_avg_1||0).toFixed(2) + ' / ' + sys.cpu_cores + ' cores</span></div>' +
             bar(cpuPct, 100, cpuColor) +
             '<div style="font-size:11px;color:var(--text-3)">' + cpuPct + '% utilization (1-min avg)</div></div>';
@@ -2265,8 +2285,8 @@ function loadRunningModel() {
     if (sys.models_dir_gb > 0 || sys.hf_cache_gb > 0) {
       html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);' +
               'display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--text-2)">';
-      if (sys.models_dir_gb > 0) html += '<span>📁 Models dir: <b>' + sys.models_dir_gb.toFixed(1) + ' GB</b></span>';
-      if (sys.hf_cache_gb > 0)   html += '<span>🤗 HF cache: <b>' + sys.hf_cache_gb.toFixed(1) + ' GB</b></span>';
+      if (sys.models_dir_gb > 0) html += '<span>Models dir: <b>' + sys.models_dir_gb.toFixed(1) + ' GB</b></span>';
+      if (sys.hf_cache_gb > 0)   html += '<span>HF cache: <b>' + sys.hf_cache_gb.toFixed(1) + ' GB</b></span>';
       html += '</div>';
     }
 
@@ -2420,6 +2440,7 @@ function openConfigurePanel(modelID) {
 
       document.getElementById('configure-overlay').hidden = false;
       document.getElementById('configure-panel').hidden = false;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     })
     .catch(function(e) { alert('Failed to load config: ' + e); });
 }
@@ -2613,113 +2634,398 @@ function saveModelConfig() {
   })
   .catch(function(e) { statusEl.textContent = '✗ ' + e; });
 }
+
+// ── Lucide icon initialisation ────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+});
 </script>
 
 <!-- ── Configure Model Panel ──────────────────────────────────────────────── -->
 <div id="configure-overlay" class="configure-overlay" hidden onclick="closeConfigurePanel()"></div>
 <div id="configure-panel" class="configure-side-panel" hidden>
+
+  <!-- Fixed header -->
   <div class="configure-panel-header">
-    <div>
-      <h2 id="configure-panel-title" style="margin:0;font-size:1.05rem">Configure Model</h2>
-      <span id="configure-backend-badge" class="badge" style="margin-top:4px;display:inline-block"></span>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
+      <div style="display:flex;align-items:center;gap:8px">
+        <i data-lucide="sliders-horizontal" style="width:15px;height:15px;flex-shrink:0;color:var(--text-3)"></i>
+        <span id="configure-panel-title" style="font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Configure Model</span>
+      </div>
+      <span id="configure-backend-badge" class="badge" style="align-self:flex-start"></span>
     </div>
-    <button class="btn btn-sm btn-default" onclick="closeConfigurePanel()" style="padding:4px 10px" title="Close">✕</button>
+    <button class="btn btn-sm btn-default configure-close-btn" onclick="closeConfigurePanel()" title="Close" style="flex-shrink:0;padding:5px 8px">
+      <i data-lucide="x" style="width:14px;height:14px"></i>
+    </button>
   </div>
 
-  <!-- Presets -->
-  <div class="configure-section">
-    <div class="configure-section-label">Presets</div>
-    <div id="configure-preset-buttons" class="configure-preset-strip"></div>
-  </div>
+  <!-- Scrollable body -->
+  <div class="configure-body">
 
-  <!-- RAM Graph -->
-  <div class="configure-ram-card">
-    <div class="configure-ram-header">
-      <span style="font-weight:600;font-size:.85rem">Estimated RAM</span>
-      <span id="ram-summary" style="font-size:.85rem;font-weight:700;margin-left:auto">— GB / 10.5 GB</span>
-      <span id="ram-fit-badge" class="badge" style="margin-left:8px"></span>
+    <!-- Presets -->
+    <div class="configure-section">
+      <div class="configure-section-label">Quick Presets</div>
+      <div id="configure-preset-buttons" class="configure-preset-strip"></div>
     </div>
-    <div class="configure-ram-track">
-      <div id="ram-seg-weights"  class="configure-ram-seg" style="background:#4a9eff" title="Model weights"></div>
-      <div id="ram-seg-kvcache" class="configure-ram-seg" style="background:#f59e0b" title="KV cache"></div>
-      <div id="ram-seg-overhead" class="configure-ram-seg" style="background:#6b7280" title="Process overhead"></div>
-    </div>
-    <div class="configure-ram-legend">
-      <span><span class="configure-dot" style="background:#4a9eff"></span>Weights <span id="legend-weights" style="font-weight:600">—</span></span>
-      <span><span class="configure-dot" style="background:#f59e0b"></span>KV Cache <span id="legend-kvcache" style="font-weight:600">—</span></span>
-      <span><span class="configure-dot" style="background:#6b7280"></span>Overhead <span id="legend-overhead" style="font-weight:600">—</span></span>
-    </div>
-    <div style="font-size:.75rem;color:var(--text-3);text-align:right;margin-top:4px">
-      ~<span id="tps-estimate" style="font-weight:600">—</span> tok/s (estimated)
-    </div>
-  </div>
 
-  <!-- Dynamic parameter sliders -->
-  <div class="configure-section">
-    <div class="configure-section-label">Parameters</div>
-    <div id="configure-params"></div>
-  </div>
+    <!-- RAM + TPS visualization -->
+    <div class="configure-ram-card">
+      <div class="configure-ram-header">
+        <span class="configure-ram-title">Memory Estimate</span>
+        <span id="ram-fit-badge" class="badge" style="margin-left:auto"></span>
+      </div>
+      <div class="configure-ram-summary-row">
+        <span id="ram-summary" class="configure-ram-total">—</span>
+        <span class="configure-ram-budget">/ 10.5 GB budget</span>
+      </div>
+      <div class="configure-ram-track">
+        <div id="ram-seg-weights"  class="configure-ram-seg" style="background:var(--blue)"   title="Model weights"></div>
+        <div id="ram-seg-kvcache"  class="configure-ram-seg" style="background:var(--yellow)" title="KV cache"></div>
+        <div id="ram-seg-overhead" class="configure-ram-seg" style="background:var(--border2)" title="Process overhead"></div>
+      </div>
+      <div class="configure-ram-legend">
+        <div class="configure-ram-legend-item">
+          <span class="configure-ram-legend-dot" style="background:var(--blue)"></span>
+          <div>
+            <div class="configure-ram-legend-label">Weights</div>
+            <div class="configure-ram-legend-val" id="legend-weights">—</div>
+          </div>
+        </div>
+        <div class="configure-ram-legend-item">
+          <span class="configure-ram-legend-dot" style="background:var(--yellow)"></span>
+          <div>
+            <div class="configure-ram-legend-label">KV Cache</div>
+            <div class="configure-ram-legend-val" id="legend-kvcache">—</div>
+          </div>
+        </div>
+        <div class="configure-ram-legend-item">
+          <span class="configure-ram-legend-dot" style="background:var(--border2)"></span>
+          <div>
+            <div class="configure-ram-legend-label">Overhead</div>
+            <div class="configure-ram-legend-val" id="legend-overhead">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="configure-tps-row">
+        <span class="configure-tps-label">
+          <i data-lucide="gauge" style="width:13px;height:13px;vertical-align:middle;margin-right:4px"></i>
+          Performance estimate
+        </span>
+        <span>
+          <span id="tps-estimate" class="configure-tps-value">—</span>
+          <span class="configure-tps-unit"> tok/s</span>
+        </span>
+      </div>
+    </div>
 
-  <!-- Actions -->
+    <!-- Parameter sliders -->
+    <div class="configure-section">
+      <div class="configure-section-label">Parameters</div>
+      <div id="configure-params"></div>
+    </div>
+
+  </div><!-- /configure-body -->
+
+  <!-- Fixed footer -->
   <div class="configure-actions">
-    <button class="btn btn-success btn-sm" onclick="saveModelConfig()">Save</button>
+    <button class="btn btn-success btn-sm" onclick="saveModelConfig()">
+      <i data-lucide="save" style="width:13px;height:13px"></i>
+      Apply & Save
+    </button>
     <button class="btn btn-sm btn-default" onclick="closeConfigurePanel()">Cancel</button>
-    <span id="configure-save-status" style="font-size:.8rem;color:var(--text-3);margin-left:8px"></span>
+    <span id="configure-save-status" style="font-size:.78rem;color:var(--text-3);margin-left:auto"></span>
   </div>
+
 </div>
 
 <style>
+/* ── Configure Panel ─────────────────────────────────────────────────────── */
 .configure-overlay {
-  position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 200;
+  animation: cfgOverlayIn .18s ease;
 }
+@keyframes cfgOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+
 .configure-side-panel {
-  position:fixed;top:0;right:0;bottom:0;width:420px;max-width:95vw;
-  background:var(--surface-1,#1c1c1e);border-left:1px solid var(--border,#3a3a3c);
-  z-index:201;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:18px;
-  box-shadow:-4px 0 24px rgba(0,0,0,.4);
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 460px; max-width: 96vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
+  animation: cfgPanelIn .22s cubic-bezier(.4, 0, .2, 1);
 }
+@keyframes cfgPanelIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
 .configure-panel-header {
-  display:flex;justify-content:space-between;align-items:flex-start;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
 }
-.configure-section { display:flex;flex-direction:column;gap:8px; }
+
+.configure-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.configure-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .configure-section-label {
-  font-size:.7rem;color:var(--text-3,#8e8e93);text-transform:uppercase;letter-spacing:.07em;font-weight:600;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .1em;
 }
-.configure-preset-strip { display:flex;gap:6px; }
+
+/* Presets */
+.configure-preset-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
 .configure-preset-btn {
-  flex:1;padding:7px 0;border-radius:6px;border:1px solid var(--border,#3a3a3c);
-  background:var(--bg,#0f0f10);color:var(--text,#f5f5f7);cursor:pointer;
-  font-size:.82rem;transition:background .15s,border-color .15s;
+  padding: 9px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  transition: all .15s;
+  text-align: center;
 }
-.configure-preset-btn:hover { background:var(--surface-2,#2c2c2e);border-color:var(--accent,#0a84ff); }
-.configure-preset-btn.active { background:var(--accent,#0a84ff);color:#fff;border-color:var(--accent,#0a84ff); }
+.configure-preset-btn:hover {
+  border-color: var(--blue);
+  color: var(--text);
+  background: var(--blue-bg);
+}
+.configure-preset-btn.active {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-color: var(--blue);
+  font-weight: 600;
+}
+
+/* RAM card */
 .configure-ram-card {
-  background:var(--bg,#0f0f10);border-radius:8px;padding:14px;
-  display:flex;flex-direction:column;gap:8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.configure-ram-header { display:flex;align-items:center;flex-wrap:wrap;gap:6px; }
+.configure-ram-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.configure-ram-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.configure-ram-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.configure-ram-total {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.configure-ram-budget {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
 .configure-ram-track {
-  height:12px;border-radius:6px;background:var(--border,#3a3a3c);
-  overflow:hidden;display:flex;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface2);
+  overflow: hidden;
+  display: flex;
 }
-.configure-ram-seg { height:100%;transition:width .2s ease; }
+.configure-ram-seg {
+  height: 100%;
+  transition: width .3s cubic-bezier(.4, 0, .2, 1);
+}
 .configure-ram-legend {
-  display:flex;gap:14px;font-size:.72rem;color:var(--text-3,#8e8e93);flex-wrap:wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
-.configure-dot {
-  width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:middle;
+.configure-ram-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
 }
-.configure-param-group { display:flex;flex-direction:column;gap:4px;margin-bottom:12px; }
+.configure-ram-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.configure-ram-legend-label {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  margin-bottom: 2px;
+}
+.configure-ram-legend-val {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* TPS */
+.configure-tps-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.configure-tps-label {
+  font-size: 12px;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.configure-tps-value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.configure-tps-unit {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+/* Parameters */
+.configure-param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: border-color .15s;
+}
+.configure-param-group:focus-within {
+  border-color: var(--border2);
+}
+.configure-param-group:last-child {
+  margin-bottom: 0;
+}
 .configure-param-label {
-  display:flex;justify-content:space-between;align-items:center;font-size:.82rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
 }
-.configure-param-flag { font-family:monospace;font-size:.75rem;color:var(--text-3,#8e8e93); }
-.configure-param-val { font-variant-numeric:tabular-nums;font-weight:600;font-size:.82rem; }
-.configure-param-group input[type=range] { width:100%;accent-color:var(--accent,#0a84ff);cursor:pointer; }
-.configure-param-desc { font-size:.72rem;color:var(--text-3,#8e8e93);line-height:1.4; }
+.configure-param-flag {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-3);
+  padding: 1px 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.configure-param-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--blue);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  min-width: 60px;
+  text-align: right;
+}
+.configure-param-group input[type=range] {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--blue);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border2);
+  border-radius: 2px;
+  outline: none;
+}
+.configure-param-group input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 2px var(--blue-bg);
+  transition: box-shadow .15s;
+}
+.configure-param-group input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px var(--blue-bg);
+}
+.configure-param-desc {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* Actions (fixed footer) */
 .configure-actions {
-  display:flex;align-items:center;gap:8px;margin-top:auto;
-  padding-top:14px;border-top:1px solid var(--border,#3a3a3c);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
 }
 </style>
 </body>
