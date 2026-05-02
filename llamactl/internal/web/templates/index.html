@@ -2394,6 +2394,225 @@ fetch('/api/system').then(function(r) { return r.json(); }).then(function(d) { w
   var hash = location.hash.replace('#', '');
   if (hash && SECTIONS.includes(hash)) showSection(hash);
 })();
+
+// ── Configure Panel ──────────────────────────────────────────────────────────
+
+var _configureState = null; // { modelID, schema, meta, values }
+
+function openConfigurePanel(modelID) {
+  document.getElementById('configure-panel-title').textContent = 'Configure ' + modelID;
+  document.getElementById('configure-save-status').textContent = '';
+  document.getElementById('configure-params').innerHTML = '<div style="color:var(--text-3);font-size:.82rem">Loading…</div>';
+
+  fetch('/api/models/config?id=' + encodeURIComponent(modelID))
+    .then(function(r) { return r.json(); })
+    .then(function(state) {
+      if (state.error) { alert('Cannot configure: ' + state.error); return; }
+      _configureState = state;
+
+      var badge = document.getElementById('configure-backend-badge');
+      badge.textContent = state.backend === 'llamaserver' ? 'GGUF / llama-server' : 'MLX / mlx_lm.server';
+      badge.className = 'badge ' + (state.backend === 'llamaserver' ? 'badge-gguf' : 'badge-mlx');
+
+      _renderPresets(state.schema.presets, state.meta);
+      _renderParams(state.schema.parameters, state.values, state.meta);
+      _updateEstimate();
+
+      document.getElementById('configure-overlay').hidden = false;
+      document.getElementById('configure-panel').hidden = false;
+    })
+    .catch(function(e) { alert('Failed to load config: ' + e); });
+}
+
+function closeConfigurePanel() {
+  document.getElementById('configure-overlay').hidden = true;
+  document.getElementById('configure-panel').hidden = true;
+  _configureState = null;
+}
+
+function _renderPresets(presets, meta) {
+  var strip = document.getElementById('configure-preset-buttons');
+  strip.innerHTML = '';
+  (presets || []).forEach(function(p) {
+    var btn = document.createElement('button');
+    btn.className = 'configure-preset-btn';
+    btn.textContent = p.label;
+    btn.dataset.preset = p.name;
+    btn.onclick = function() { _applyPreset(p, meta); };
+    strip.appendChild(btn);
+  });
+}
+
+function _resolvePresetNgl(val, meta) {
+  // Sentinel values: 0=all layers, -1=70%, -2=50%
+  if (val === 0)  return meta.num_layers || 99;
+  if (val === -1) return Math.round((meta.num_layers || 32) * 0.7);
+  if (val === -2) return Math.round((meta.num_layers || 32) * 0.5);
+  return val;
+}
+
+function _applyPreset(preset, meta) {
+  document.querySelectorAll('.configure-preset-btn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  var activeBtn = document.querySelector('[data-preset="' + preset.name + '"]');
+  if (activeBtn) activeBtn.classList.add('active');
+
+  Object.keys(preset.values).forEach(function(id) {
+    var rawVal = preset.values[id];
+    var val = (id === 'ngl') ? _resolvePresetNgl(rawVal, meta) : rawVal;
+    var slider = document.getElementById('cparam-' + id);
+    var display = document.getElementById('cparam-display-' + id);
+    if (slider) {
+      slider.value = val;
+      if (display) display.textContent = _formatParamVal(id, val, slider.dataset.ptype, slider.dataset.unit);
+    }
+  });
+  _updateEstimate();
+}
+
+function _renderParams(parameters, currentValues, meta) {
+  var container = document.getElementById('configure-params');
+  container.innerHTML = '';
+
+  (parameters || []).forEach(function(p) {
+    var maxVal = (p.max === 0) ? (meta.num_layers || 99) : p.max;
+    var current = (currentValues[p.id] !== undefined)
+      ? Math.min(currentValues[p.id], maxVal) : p.default;
+
+    var div = document.createElement('div');
+    div.className = 'configure-param-group';
+    div.innerHTML =
+      '<div class="configure-param-label">' +
+        '<span>' + p.label + ' <span class="configure-param-flag">' + p.flag + '</span></span>' +
+        '<span class="configure-param-val" id="cparam-display-' + p.id + '">' +
+          _formatParamVal(p.id, current, p.type, p.unit) +
+        '</span>' +
+      '</div>' +
+      '<input type="range" id="cparam-' + p.id + '"' +
+        ' min="' + p.min + '" max="' + maxVal + '" step="' + p.step + '" value="' + current + '"' +
+        ' data-id="' + p.id + '" data-ptype="' + p.type + '" data-unit="' + p.unit + '"' +
+        ' oninput="onConfigParamChange(\'' + p.id + '\', this)">' +
+      '<div class="configure-param-desc">' + p.description + '</div>';
+    container.appendChild(div);
+  });
+}
+
+function onConfigParamChange(id, input) {
+  var display = document.getElementById('cparam-display-' + id);
+  if (display) display.textContent = _formatParamVal(id, +input.value, input.dataset.ptype, input.dataset.unit);
+  document.querySelectorAll('.configure-preset-btn').forEach(function(b) { b.classList.remove('active'); });
+  _updateEstimate();
+}
+
+function _formatParamVal(id, val, type, unit) {
+  if (type === 'bytes') return (val / 1073741824).toFixed(1) + ' GB';
+  if (unit === 'tokens' && val >= 1000) return Math.round(val / 1000) + 'K tokens';
+  return val + ' ' + (unit || '');
+}
+
+function _getCurrentConfigValues() {
+  var values = {};
+  document.querySelectorAll('#configure-params input[type=range]').forEach(function(input) {
+    values[input.dataset.id] = +input.value;
+  });
+  return values;
+}
+
+function _updateEstimate() {
+  if (!_configureState) return;
+  var backend = _configureState.backend;
+  var meta = _configureState.meta;
+  var values = _getCurrentConfigValues();
+  var budget = 10.5;
+
+  var est = _computeRAMEstimate(backend, meta, values);
+  var pct = function(gb) { return Math.min(100, gb / budget * 100).toFixed(1) + '%'; };
+
+  document.getElementById('ram-seg-weights').style.width  = pct(est.weightsGB);
+  document.getElementById('ram-seg-kvcache').style.width  = pct(est.kvCacheGB);
+  document.getElementById('ram-seg-overhead').style.width = pct(est.overheadGB);
+
+  document.getElementById('ram-summary').textContent = est.totalGB.toFixed(1) + ' GB / ' + budget + ' GB';
+  document.getElementById('legend-weights').textContent  = est.weightsGB.toFixed(1) + ' GB';
+  document.getElementById('legend-kvcache').textContent  = est.kvCacheGB.toFixed(2) + ' GB';
+  document.getElementById('legend-overhead').textContent = est.overheadGB.toFixed(2) + ' GB';
+
+  var fitBadge = document.getElementById('ram-fit-badge');
+  if (est.totalGB <= budget) {
+    fitBadge.textContent = '✓ Fits';
+    fitBadge.className = 'badge badge-green';
+  } else {
+    fitBadge.textContent = '✗ Over budget';
+    fitBadge.className = 'badge badge-red';
+  }
+
+  document.getElementById('tps-estimate').textContent = est.tps.toFixed(1);
+}
+
+// Mirrors estimate.go logic in JS for live updates without round-trips.
+function _computeRAMEstimate(backend, meta, values) {
+  var weightsGB  = (meta.file_size_bytes || 0) / 1e9;
+  var overheadGB = 0.35;
+  var kvCacheGB  = 0;
+  var tps        = 0;
+
+  if (backend === 'llamaserver') {
+    var ctxSize  = values['ctx_size']  || 4096;
+    var parallel = values['parallel']  || 1;
+    var ngl      = (values['ngl'] !== undefined) ? values['ngl'] : (meta.num_layers || 99);
+    var numLayers  = meta.num_layers   || 1;
+    var numKVHeads = meta.num_kv_heads || 8;
+    var hiddenSize = meta.hidden_size  || 4096;
+    var numHeads   = meta.num_heads    || 32;
+    var headDim = hiddenSize / numHeads;
+    kvCacheGB = (2 * numLayers * numKVHeads * headDim * ctxSize * 2 * parallel) / 1e9;
+
+    var paramsB  = weightsGB / 0.5 || 7;
+    var baseTPS  = 80 / Math.sqrt(paramsB / 7);
+    var actualNgl = Math.min(ngl, numLayers);
+    var gpuFrac = actualNgl / numLayers;
+    tps = baseTPS * (gpuFrac + (1 - gpuFrac) * 0.1);
+
+  } else if (backend === 'mlxlm') {
+    var cacheBytes = values['cache_bytes'] || 2147483648;
+    kvCacheGB = cacheBytes / 1e9;
+    var paramsB2 = weightsGB / 0.5 || 7;
+    tps = 80 / Math.sqrt(paramsB2 / 7);
+  }
+
+  var totalGB = weightsGB + kvCacheGB + overheadGB;
+  return { weightsGB: weightsGB, kvCacheGB: kvCacheGB, overheadGB: overheadGB, totalGB: totalGB, tps: tps };
+}
+
+function saveModelConfig() {
+  if (!_configureState) return;
+  var modelID = _configureState.model_id;
+  var schema  = _configureState.schema;
+  var rawValues = _getCurrentConfigValues();
+
+  var values = {};
+  (schema.parameters || []).forEach(function(p) {
+    if (rawValues[p.id] !== undefined) values[p.id] = rawValues[p.id];
+  });
+
+  var statusEl = document.getElementById('configure-save-status');
+  statusEl.textContent = 'Saving…';
+
+  fetch('/api/models/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_id: modelID, values: values })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok) { statusEl.textContent = '✗ ' + (data.error || 'Save failed'); return; }
+    statusEl.textContent = '✓ Saved';
+    if (data.restart_required) showRestartBanner();
+    setTimeout(closeConfigurePanel, 1200);
+  })
+  .catch(function(e) { statusEl.textContent = '✗ ' + e; });
+}
 </script>
 
 <!-- ── Configure Model Panel ──────────────────────────────────────────────── -->
