@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -12,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
+	"github.com/andermurias/llamactl/internal/modelconfig"
 	"github.com/andermurias/llamactl/internal/modelmanager"
 	"github.com/andermurias/llamactl/internal/service"
 	"github.com/andermurias/llamactl/internal/system"
@@ -1148,3 +1152,220 @@ func (s *Server) handleProcessMemory(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, result)
 }
 
+// ── Model Configure Panel ─────────────────────────────────────────────────────
+
+// handleModelConfigGetOrSave dispatches GET→read and POST→save for /api/models/config.
+func (s *Server) handleModelConfigGetOrSave(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleModelConfigGet(w, r)
+	case http.MethodPost:
+		s.handleModelConfigSave(w, r)
+	default:
+		jsonErr(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
+}
+
+// handleModelConfigGet returns the full ConfigState for a model:
+// backend schema, current parsed values, metadata, and estimates.
+// GET /api/models/config?id=<model-id>
+func (s *Server) handleModelConfigGet(w http.ResponseWriter, r *http.Request) {
+	modelID := r.URL.Query().Get("id")
+	if modelID == "" {
+		jsonErr(w, http.StatusBadRequest, "id query param required")
+		return
+	}
+
+	raw, err := os.ReadFile(s.cfg.ConfigFile)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "read config: "+err.Error())
+		return
+	}
+
+	cmd, err := extractModelCmd(string(raw), modelID)
+	if err != nil {
+		jsonErr(w, http.StatusNotFound, fmt.Sprintf("model %q not found", modelID))
+		return
+	}
+
+	backend := modelconfig.Detect(cmd)
+	if backend == "" {
+		jsonErr(w, http.StatusBadRequest, "model backend not supported for configuration")
+		return
+	}
+
+	schema, _ := modelconfig.Get(backend)
+
+	// Parse current values from cmd string.
+	rawValues := modelconfig.ParseCmd(cmd)
+	values := make(map[string]int)
+	for _, p := range schema.Parameters {
+		if strVal, ok := rawValues[p.Flag]; ok {
+			var n int
+			fmt.Sscanf(strVal, "%d", &n)
+			values[p.ID] = n
+		}
+	}
+
+	// Load cached metadata — fall back to reading from file on cache miss.
+	meta, _ := modelconfig.GetMeta("", modelID)
+	meta.ModelID = modelID
+	meta.Backend = backend
+
+	if meta.NumLayers == 0 && backend == "llamaserver" {
+		if modelPath, ok := rawValues["--model"]; ok {
+			if ggufMeta, err := modelconfig.ReadGGUFMeta(modelPath); err == nil {
+				if info, err := os.Stat(modelPath); err == nil {
+					meta.FileSizeBytes = info.Size()
+				}
+				meta.NumLayers = ggufMeta.NumLayers
+				meta.NumHeads = ggufMeta.NumHeads
+				meta.NumKVHeads = ggufMeta.NumKVHeads
+				meta.HiddenSize = ggufMeta.HiddenSize
+				meta.MaxContext = ggufMeta.MaxContext
+				_ = modelconfig.UpsertMeta("", meta)
+			}
+		}
+	}
+
+	estimate := modelconfig.EstimateRAM(backend, meta, values)
+
+	jsonOK(w, modelconfig.ConfigState{
+		ModelID:  modelID,
+		Backend:  backend,
+		Schema:   schema,
+		Meta:     meta,
+		Values:   values,
+		Estimate: estimate,
+	})
+}
+
+// handleModelConfigSave writes updated parameter values back into the cmd string
+// in llama-swap.yaml.
+// POST /api/models/config  body: ConfigSaveRequest JSON
+func (s *Server) handleModelConfigSave(w http.ResponseWriter, r *http.Request) {
+	var req modelconfig.ConfigSaveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, http.StatusBadRequest, "decode body: "+err.Error())
+		return
+	}
+	if req.ModelID == "" {
+		jsonErr(w, http.StatusBadRequest, "model_id required")
+		return
+	}
+	if len(req.Values) == 0 {
+		jsonErr(w, http.StatusBadRequest, "values required")
+		return
+	}
+
+	raw, err := os.ReadFile(s.cfg.ConfigFile)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "read config: "+err.Error())
+		return
+	}
+
+	cmd, err := extractModelCmd(string(raw), req.ModelID)
+	if err != nil {
+		jsonErr(w, http.StatusNotFound, fmt.Sprintf("model %q not found", req.ModelID))
+		return
+	}
+
+	backend := modelconfig.Detect(cmd)
+	schema, ok := modelconfig.Get(backend)
+	if !ok {
+		jsonErr(w, http.StatusBadRequest, "unsupported backend")
+		return
+	}
+
+	updates := make(map[string]string)
+	for _, p := range schema.Parameters {
+		if v, ok := req.Values[p.ID]; ok {
+			updates[p.Flag] = fmt.Sprintf("%d", v)
+		}
+	}
+
+	newCmd := modelconfig.WriteCmd(cmd, updates)
+	newYAML, err := replaceModelCmd(string(raw), req.ModelID, newCmd)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "patch yaml: "+err.Error())
+		return
+	}
+
+	if err := os.WriteFile(s.cfg.ConfigFile, []byte(newYAML), 0o644); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "write config: "+err.Error())
+		return
+	}
+
+	jsonOK(w, map[string]any{"ok": true, "restart_required": true})
+}
+
+// extractModelCmd finds the cmd string for modelID in llama-swap YAML content.
+func extractModelCmd(yamlContent, modelID string) (string, error) {
+	var doc map[string]any
+	if err := yaml.Unmarshal([]byte(yamlContent), &doc); err != nil {
+		return "", err
+	}
+	models, ok := doc["models"].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("no models section")
+	}
+	entry, ok := models[modelID].(map[string]any)
+	if !ok {
+		return "", fmt.Errorf("model not found")
+	}
+	cmd, _ := entry["cmd"].(string)
+	if cmd == "" {
+		return "", fmt.Errorf("model has no cmd")
+	}
+	return cmd, nil
+}
+
+// replaceModelCmd updates the cmd value for modelID in the YAML document
+// using yaml.v3 Node manipulation, which preserves comments and structure.
+func replaceModelCmd(yamlContent, modelID, newCmd string) (string, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(yamlContent), &doc); err != nil {
+		return "", fmt.Errorf("parse yaml: %w", err)
+	}
+	if len(doc.Content) == 0 {
+		return "", fmt.Errorf("empty document")
+	}
+	root := doc.Content[0]
+
+	modelsNode := yamlFindKey(root, "models")
+	if modelsNode == nil {
+		return "", fmt.Errorf("no models section")
+	}
+	modelNode := yamlFindKey(modelsNode, modelID)
+	if modelNode == nil {
+		return "", fmt.Errorf("model %q not found", modelID)
+	}
+	cmdNode := yamlFindKey(modelNode, "cmd")
+	if cmdNode == nil {
+		return "", fmt.Errorf("no cmd for model %q", modelID)
+	}
+
+	cmdNode.Value = newCmd
+	if strings.Contains(newCmd, "\n") {
+		cmdNode.Style = yaml.LiteralStyle
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("marshal yaml: %w", err)
+	}
+	return string(out), nil
+}
+
+// yamlFindKey finds the value node for the given key in a mapping node.
+func yamlFindKey(mapping *yaml.Node, key string) *yaml.Node {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i < len(mapping.Content)-1; i += 2 {
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i+1]
+		}
+	}
+	return nil
+}

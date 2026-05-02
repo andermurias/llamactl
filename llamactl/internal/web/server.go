@@ -76,6 +76,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/models/files", s.handleModelFiles)
 	s.mux.HandleFunc("/api/models/install", s.handleModelInstall)
 	s.mux.HandleFunc("/api/models/manage", s.handleModelManage)
+	s.mux.HandleFunc("/api/models/config", s.handleModelConfigGetOrSave)
 	s.mux.HandleFunc("/api/logs", s.handleLogs)
 	s.mux.HandleFunc("/api/config", s.handleConfig)
 

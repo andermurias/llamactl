@@ -481,3 +481,171 @@ func TestHandleLogs_MissingLogFile(t *testing.T) {
 		t.Errorf("expected error field when log file is missing; body: %s", body)
 	}
 }
+
+// ── /api/models/config ────────────────────────────────────────────────────────
+
+const configTestFixture = `httpListenAddress: 127.0.0.1:8080
+models:
+  test-gguf-model:
+    cmd: |-
+      llama-server
+      --model /tmp/test.gguf
+      --alias test-gguf-model
+      --host 127.0.0.1
+      --port 5800
+      -ngl 99
+      --ctx-size 4096
+      --threads 4
+    ttl: 300
+  test-mlx-model:
+    cmd: |-
+      /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+      --model mlx-community/test-model
+      --host 127.0.0.1
+      --port 5801
+      --max-tokens 8192
+      --prefill-step-size 256
+      --prompt-cache-size 2
+      --prompt-cache-bytes 2147483648
+    ttl: 120
+`
+
+// newConfigTestServer creates a test server pre-populated with fixture models
+// for configure-panel testing. It writes the config directly via POST /api/config.
+func newConfigTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	ts := newTestServer(t)
+
+	// POST /api/config with {"content": "..."} to write the fixture YAML.
+	saveResp, saveBody := postJSON(t, ts.URL, "/api/config", map[string]string{"content": configTestFixture})
+	if saveResp.StatusCode != http.StatusOK {
+		t.Fatalf("config fixture write failed: status=%d body=%s", saveResp.StatusCode, saveBody)
+	}
+	return ts
+}
+
+func TestHandleModelConfigGet_UnknownModel(t *testing.T) {
+	ts := newTestServer(t)
+	resp, _ := get(t, ts.URL, "/api/models/config?id=does-not-exist")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestHandleModelConfigGet_MissingID(t *testing.T) {
+	ts := newTestServer(t)
+	resp, _ := get(t, ts.URL, "/api/models/config")
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestHandleModelConfigGet_LlamaServerModel(t *testing.T) {
+	ts := newConfigTestServer(t)
+
+	resp, body := get(t, ts.URL, "/api/models/config?id=test-gguf-model")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+
+	var state map[string]any
+	parseJSON(t, body, &state)
+
+	if state["model_id"] != "test-gguf-model" {
+		t.Errorf("model_id = %v, want test-gguf-model", state["model_id"])
+	}
+	if state["backend"] != "llamaserver" {
+		t.Errorf("backend = %v, want llamaserver", state["backend"])
+	}
+	schema, ok := state["schema"].(map[string]any)
+	if !ok {
+		t.Fatal("schema not an object")
+	}
+	params, ok := schema["parameters"].([]any)
+	if !ok || len(params) == 0 {
+		t.Error("schema.parameters should be non-empty array")
+	}
+	values, ok := state["values"].(map[string]any)
+	if !ok {
+		t.Fatal("values not an object")
+	}
+	// -ngl 99 should be parsed
+	if ngl, ok := values["ngl"]; !ok || ngl == nil {
+		t.Errorf("values.ngl missing, got values = %v", values)
+	}
+}
+
+func TestHandleModelConfigGet_MLXModel(t *testing.T) {
+	ts := newConfigTestServer(t)
+
+	resp, body := get(t, ts.URL, "/api/models/config?id=test-mlx-model")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.StatusCode, body)
+	}
+
+	var state map[string]any
+	parseJSON(t, body, &state)
+
+	if state["backend"] != "mlxlm" {
+		t.Errorf("backend = %v, want mlxlm", state["backend"])
+	}
+	values, _ := state["values"].(map[string]any)
+	if _, ok := values["max_tokens"]; !ok {
+		t.Errorf("values.max_tokens missing, got values = %v", values)
+	}
+}
+
+func TestHandleModelConfigSave_MissingBody(t *testing.T) {
+	ts := newTestServer(t)
+	resp, _ := postJSON(t, ts.URL, "/api/models/config", map[string]any{})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestHandleModelConfigSave_UnknownModel(t *testing.T) {
+	ts := newTestServer(t)
+	resp, _ := postJSON(t, ts.URL, "/api/models/config", map[string]any{
+		"model_id": "ghost-model",
+		"values":   map[string]int{"ngl": 20},
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestHandleModelConfigSave_UpdatesConfig(t *testing.T) {
+	ts := newConfigTestServer(t)
+
+	resp, body := postJSON(t, ts.URL, "/api/models/config", map[string]any{
+		"model_id": "test-gguf-model",
+		"values":   map[string]int{"ngl": 20, "ctx_size": 2048, "threads": 3, "parallel": 1},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("save status = %d, body = %s", resp.StatusCode, body)
+	}
+
+	var result map[string]any
+	parseJSON(t, body, &result)
+	if result["ok"] != true {
+		t.Errorf("result.ok = %v, want true", result["ok"])
+	}
+	if result["restart_required"] != true {
+		t.Errorf("result.restart_required = %v, want true", result["restart_required"])
+	}
+
+	// Verify the updated values are returned on subsequent GET.
+	resp2, body2 := get(t, ts.URL, "/api/models/config?id=test-gguf-model")
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("GET after save status = %d, body = %s", resp2.StatusCode, body2)
+	}
+	var state map[string]any
+	parseJSON(t, body2, &state)
+	values, _ := state["values"].(map[string]any)
+	if ngl, _ := values["ngl"].(float64); int(ngl) != 20 {
+		t.Errorf("after save: ngl = %v, want 20", values["ngl"])
+	}
+	if ctx, _ := values["ctx_size"].(float64); int(ctx) != 2048 {
+		t.Errorf("after save: ctx_size = %v, want 2048", values["ctx_size"])
+	}
+}
