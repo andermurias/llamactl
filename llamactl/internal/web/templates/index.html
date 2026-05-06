@@ -1275,15 +1275,16 @@
                   </select>
                 </div>
                 <div id="img-upload-area">
-                  <input type="file" id="img-ref" accept="image/*" style="display:none">
-                  <div id="img-dropzone" onclick="document.getElementById('img-ref').click()" style="border:2px dashed var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer; transition:border-color .15s">
-                    <svg class="icon" width="24" height="24" style="color:var(--text-3); margin-bottom:6px"><use href="#icon-image"/></svg>
-                    <div style="font-size:12px; color:var(--text-3)">Click or drop an image here</div>
-                    <div style="font-size:11px; color:var(--text-3); margin-top:2px">JPG, PNG, WEBP</div>
+                  <!-- Dropzone with invisible file input overlay -->
+                  <div id="img-dropzone" style="position:relative; border:2px dashed var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer; transition:border-color .15s; min-height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center">
+                    <input type="file" id="img-ref" accept="image/*" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2">
+                    <svg class="icon" width="24" height="24" style="color:var(--text-3); margin-bottom:6px; pointer-events:none"><use href="#icon-image"/></svg>
+                    <div style="font-size:12px; color:var(--text-3); pointer-events:none">Click or drop an image here</div>
+                    <div style="font-size:11px; color:var(--text-3); margin-top:2px; pointer-events:none">JPG, PNG, WEBP</div>
                   </div>
                   <div id="img-preview-wrap" style="display:none; margin-top:8px; position:relative">
                     <img id="img-preview" style="max-height:120px; border-radius:6px; border:1px solid var(--border)">
-                    <button class="btn btn-sm btn-danger" onclick="clearBaseImage()" style="position:absolute; top:4px; right:4px; padding:2px 6px; font-size:10px">✕</button>
+                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); clearBaseImage();" style="position:absolute; top:4px; right:4px; padding:2px 6px; font-size:10px; z-index:3">✕</button>
                   </div>
                 </div>
               </div>
@@ -2977,14 +2978,15 @@ document.getElementById('img-ref').addEventListener('change', function() {
   if (this.files && this.files[0]) handleImageFile(this.files[0]);
 });
 
-// Drag-and-drop on dropzone
-var dropzone = document.getElementById('img-dropzone');
-if (dropzone) {
-  dropzone.addEventListener('dragover', function(e) { e.preventDefault(); this.style.borderColor = 'var(--blue)'; });
-  dropzone.addEventListener('dragleave', function(e) { e.preventDefault(); this.style.borderColor = ''; });
-  dropzone.addEventListener('drop', function(e) {
+// Drag-and-drop on upload area (covers both dropzone and invisible input)
+var uploadArea = document.getElementById('img-upload-area');
+if (uploadArea) {
+  uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); var dz = document.getElementById('img-dropzone'); if (dz) dz.style.borderColor = 'var(--blue)'; });
+  uploadArea.addEventListener('dragleave', function(e) { e.preventDefault(); var dz = document.getElementById('img-dropzone'); if (dz) dz.style.borderColor = ''; });
+  uploadArea.addEventListener('drop', function(e) {
     e.preventDefault();
-    this.style.borderColor = '';
+    var dz = document.getElementById('img-dropzone');
+    if (dz) dz.style.borderColor = '';
     var files = e.dataTransfer.files;
     if (files && files[0]) {
       var dt = new DataTransfer();
