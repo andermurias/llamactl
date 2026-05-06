@@ -230,16 +230,19 @@ def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps
 # ── Prompt enhancement ───────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = (
-    "You are a prompt engineer for Stable Diffusion image generation. "
-    "Take the user's simple description and expand it into a detailed, "
-    "high-quality prompt. Return ONLY a JSON object with these keys: "
+    "You are a prompt assistant for Stable Diffusion. The user wrote a prompt. "
+    "Your job is to preserve their EXACT subject, style, and composition. "
+    "Only add minor lighting/atmosphere details if they are missing. "
+    "Do NOT change the subject, style, or composition. "
+    "Return ONLY a JSON object with these keys: "
     "positive (string), negative (string), quality_tags (string). "
+    "quality_tags should be short comma-separated tags like 'masterpiece, best quality'. "
     "Do not output markdown or explanations."
 )
 
 
 async def enhance_prompt(raw_prompt: str, enhance_url: str, enhance_model: str, api_key: str = "") -> tuple[str, str]:
-    """Call LLM API to expand a simple prompt into detailed positive/negative prompts."""
+    """Call LLM API to lightly enhance a prompt while preserving user intent."""
     if not enhance_url:
         return raw_prompt, ""
 
@@ -253,8 +256,8 @@ async def enhance_prompt(raw_prompt: str, enhance_url: str, enhance_model: str, 
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": raw_prompt},
         ],
-        "temperature": 0.7,
-        "max_tokens": 1024,
+        "temperature": 0.4,
+        "max_tokens": 512,
     }
 
     try:
@@ -269,8 +272,9 @@ async def enhance_prompt(raw_prompt: str, enhance_url: str, enhance_model: str, 
                 parsed = json.loads(content)
                 positive = parsed.get("positive", raw_prompt)
                 negative = parsed.get("negative", "")
-                quality = parsed.get("quality_tags", "masterpiece, best quality, 8k uhd")
-                if quality:
+                quality = parsed.get("quality_tags", "")
+                # Only prepend quality tags if they are short and relevant
+                if quality and len(quality) < 100:
                     positive = f"{quality}, {positive}"
                 return positive, negative
             except json.JSONDecodeError:

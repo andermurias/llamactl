@@ -1257,8 +1257,8 @@
             </div>
             <div style="display:flex; align-items:center; gap:8px">
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); cursor:pointer">
-                <input type="checkbox" id="img-enhance" checked style="accent-color:var(--blue)">
-                Enhance prompt with LLM
+                <input type="checkbox" id="img-enhance" style="accent-color:var(--blue)">
+                Enhance prompt with LLM (may change your prompt)
               </label>
             </div>
             <div id="img-ref-row" style="display:none">
@@ -2922,15 +2922,6 @@ function generateImage() {
   } else {
     _doFetch();
   }
-}
-  })
-  .catch(function(e) {
-    status.textContent = '';
-    showToast('Generation failed', 'error', e.message);
-  })
-  .finally(function() {
-    btn.disabled = false;
-  });
 }
 
 function downloadImage() {
