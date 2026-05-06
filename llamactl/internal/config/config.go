@@ -34,6 +34,9 @@ type Config struct {
 	// Model manager
 	DisabledFile string // ~/AI/llamactl-disabled.yaml
 	ModelsDir    string // ~/AI/models
+
+	// Voice manager (XTTS)
+	VoicesDir string // ~/AI/voices
 }
 
 // Load returns a Config populated from environment / defaults.
@@ -65,5 +68,6 @@ func Load() *Config {
 		WebLogFile:    filepath.Join(logDir, "llamactl-web.log"),
 		DisabledFile:  filepath.Join(aiDir, "llamactl-disabled.yaml"),
 		ModelsDir:     filepath.Join(aiDir, "models"),
+		VoicesDir:     filepath.Join(aiDir, "voices"),
 	}
 }

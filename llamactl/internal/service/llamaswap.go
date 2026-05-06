@@ -8,13 +8,15 @@
 package service
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/andermurias/llamactl/internal/config"
 	"github.com/andermurias/llamactl/internal/launchd"
@@ -193,8 +195,10 @@ type ModelsInfo struct {
 
 // ModelMeta holds static metadata extracted from llama-swap.yaml for a single model.
 type ModelMeta struct {
-	Backend string // "MLX", "GGUF", "TTS", "STT", "Unknown"
-	CtxSize int    // context window size (0 = not found in config)
+	Backend   string // "MLX", "GGUF", "TTS", "STT", "API"
+	CtxSize   int    // context window size in k (0 = not found)
+	HFID      string // useModelName / HuggingFace model ID
+	SizeBytes int64  // file size (GGUF) or HF cache size (MLX), 0 if unknown
 }
 
 // GetModelsInfo collects model data from all sources. Never returns nil.
@@ -219,58 +223,68 @@ func GetModelsInfo(cfg *config.Config) *ModelsInfo {
 	return info
 }
 
-// parseModelMeta reads the llama-swap YAML config and extracts backend type
-// and context window size for each model entry.
+// parseModelMeta reads the llama-swap YAML config and extracts backend type,
+// context window size, and HF model ID for each model entry.
 func parseModelMeta(configFile string) map[string]ModelMeta {
 	meta := make(map[string]ModelMeta)
-	f, err := os.Open(configFile)
+
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return meta
 	}
-	defer f.Close()
 
-	// Simple line-based parser: look for "  id:" at indent level 2
-	// then scan its "cmd:" line without pulling in a full YAML parser.
-	var currentID string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Top-level model key: exactly 2 leading spaces, ends with ":"
-		if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "   ") {
-			trimmed := strings.TrimSpace(line)
-			if strings.HasSuffix(trimmed, ":") && !strings.Contains(trimmed, " ") {
-				currentID = strings.TrimSuffix(trimmed, ":")
-			}
-			continue
+	var root struct {
+		Models map[string]struct {
+			Cmd          string `yaml:"cmd"`
+			UseModelName string `yaml:"useModelName"`
+		} `yaml:"models"`
+	}
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return meta
+	}
+
+	for id, entry := range root.Models {
+		m := ModelMeta{
+			Backend:  detectBackend(entry.Cmd),
+			HFID:     entry.UseModelName,
 		}
-		if currentID == "" {
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "cmd:") {
-			cmd := strings.TrimSpace(strings.TrimPrefix(trimmed, "cmd:"))
-			cmd = strings.Trim(cmd, `"'`)
-			m := meta[currentID]
-			m.Backend = detectBackend(cmd)
-			meta[currentID] = m
-		}
-		if strings.HasPrefix(trimmed, "--ctx-size") || strings.Contains(trimmed, "--ctx-size") {
-			// Extract value after --ctx-size
-			if idx := strings.Index(trimmed, "--ctx-size"); idx >= 0 {
-				rest := strings.TrimSpace(trimmed[idx+len("--ctx-size"):])
-				rest = strings.TrimLeft(rest, " =")
-				parts := strings.Fields(rest)
-				if len(parts) > 0 {
-					if n, err := strconv.Atoi(parts[0]); err == nil {
-						m := meta[currentID]
-						m.CtxSize = n
-						meta[currentID] = m
-					}
+		// Extract --ctx-size from cmd, store in k units for display
+		if idx := strings.Index(entry.Cmd, "--ctx-size"); idx >= 0 {
+			rest := strings.TrimSpace(entry.Cmd[idx+len("--ctx-size"):])
+			rest = strings.TrimLeft(rest, " =")
+			parts := strings.Fields(rest)
+			if len(parts) > 0 {
+				if n, err := strconv.Atoi(parts[0]); err == nil {
+					m.CtxSize = n / 1024 // store as k (e.g. 32 for 32768)
 				}
 			}
 		}
+		// For MLX models, try to get cached model size from HF cache
+		if m.Backend == "MLX" && m.HFID != "" {
+			m.SizeBytes = hfCacheModelSize(m.HFID)
+		}
+		meta[id] = m
 	}
 	return meta
+}
+
+// hfCacheModelSize returns the total size in bytes of a model's HF cache directory.
+func hfCacheModelSize(hfID string) int64 {
+	home, _ := os.UserHomeDir()
+	parts := strings.SplitN(hfID, "/", 2)
+	if len(parts) != 2 {
+		return 0
+	}
+	dirName := "models--" + strings.ReplaceAll(parts[0], "/", "--") + "--" + strings.ReplaceAll(parts[1], "/", "--")
+	modelDir := filepath.Join(home, ".cache", "huggingface", "hub", dirName)
+	var size int64
+	_ = filepath.Walk(modelDir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
 }
 
 // detectBackend classifies a model's command string into a backend type.

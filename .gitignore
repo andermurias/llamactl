@@ -20,6 +20,8 @@ llamactl-disabled.yaml
 # ── Third-party repos — cloned fresh by install.sh ───────────────────────────
 # Not tracked: they're third-party repos; our launcher scripts are tracked.
 Kokoro-FastAPI/
+Orpheus-FastAPI/
+voxtral-tts.c/
 
 # ── ComfyUI — cloned fresh by llamactl comfyui install / install.sh ──────────
 # The ComfyUI directory itself is not tracked (large, third-party code).
@@ -52,3 +54,7 @@ build/
 # ── Environment / secrets ─────────────────────────────────────────────────────
 .env
 .env.local
+
+# ── Local tooling / runtime ───────────────────────────────────────────────────
+.claude/
+xtts-fastapi/voices/

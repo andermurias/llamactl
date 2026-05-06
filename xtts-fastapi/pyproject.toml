@@ -1,0 +1,13 @@
+[project]
+name = "xtts-fastapi"
+version = "0.1.0"
+description = "OpenAI-compatible TTS server wrapping Coqui XTTS v2"
+requires-python = ">=3.9,<3.12"
+dependencies = [
+    "TTS>=0.22.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "transformers>=4.40.0,<4.50.0",
+    "torchcodec>=0.9.1",
+    "pydub>=0.25.1",
+]

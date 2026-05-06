@@ -6,6 +6,7 @@
 # • mlx_lm.server             — MLX models on Apple Silicon; same OpenAI API.
 #                               Models cached in ~/.cache/huggingface/ on first use.
 # • Kokoro-FastAPI             — OpenAI-compatible TTS, MPS-accelerated.
+# • xtts-fastapi               — Coqui XTTS v2, multilingual TTS, voice cloning.
 #
 # ── Key llama-swap features used ─────────────────────────────────────────────
 # • ${PORT}       — auto-assigned port per model; proxy defaults to localhost:${PORT}
@@ -50,6 +51,16 @@ groups:
             - gemma-4-e4b-it-6bit-mlx
             - gemma-4-e4b-it-gguf
             - gemma-3-12b-it-mlx
+            # ── Image generation · ComfyUI-backed ─────────────────────────────────────
+            - cyber-portrait
+            - cyber-photo
+            - cyber-anime
+            - cyber-ipadapter
+            - cyber-upscale
+            # ── New LLMs · 2025 ───────────────────────────────────────────────────────
+            - deepseek-r1-llama-8b
+            - qwen3.5-9b-optiq
+            - qwen3-14b
 models:
     # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
     # --alias makes /v1/models report the same name clients use in requests.
@@ -66,6 +77,18 @@ models:
             --log-file /Users/andermurias/AI/logs/inference.log
         useModelName: "gemma-3-12b-it"
         ttl: 300
+
+    # ── TTS · Voxtral 4B (pure C, Apple Accelerate) ─────────────────────────
+    # Voxtral-4B-TTS-2603 via voxtral-tts.c — self-hosted, no CUDA required.
+    # Built with 'make apple' for NEON + Apple Accelerate BLAS on M4.
+    # NOT always running — llama-swap starts/stops on demand (TTL=600s).
+    # Voices: es_female, es_male (Spanish), neutral_female, casual_male, etc.
+    # API:  POST http://localhost:8080/v1/audio/speech
+    #   { "model": "voxtral-tts", "input": "...", "voice": "es_female", "response_format": "wav" }
+    voxtral-tts:
+        cmd: /Users/andermurias/AI/scripts/start-voxtral.sh ${PORT}
+        checkEndpoint: /health
+        ttl: 600
     # ── Embeddings · GGUF (llama.cpp) ────────────────────────────────────────
     nomic-embed-text-v1.5:
         cmd: |
@@ -279,6 +302,39 @@ models:
         useModelName: "kokoro"
         checkEndpoint: /health
         ttl: 120
+    # ── TTS · Orpheus — Spanish/Italian Natural Voice ────────────────────────
+    # Llama-3B based TTS model fine-tuned for Spanish/Italian.
+    # Produces the most natural-sounding speech of any open TTS model.
+    # Architecture: llama-server (token gen, Metal-accelerated) + Orpheus-FastAPI
+    # (SNAC codec decoder + OpenAI-compatible HTTP API).
+    #
+    # TTL 300s: model takes ~30s to start (loads llama-server + SNAC weights),
+    # so we keep it alive longer to avoid paying startup cost on every request.
+    #
+    # Voices: javi (male warm), sergio (male professional), maria (female friendly)
+    # API:  POST http://localhost:8080/v1/audio/speech
+    #   { "model": "orpheus-tts", "input": "...", "voice": "maria" }
+    orpheus-tts:
+        cmd: /Users/andermurias/AI/scripts/start-orpheus.sh ${PORT}
+        checkEndpoint: /openapi.json
+        ttl: 300
+    # ── TTS · XTTS v2 — Multilingual, Spanish-focused ────────────────────────
+    # Coqui XTTS v2 — 17-language multilingual TTS with 50+ built-in speakers.
+    # Best for Spanish. Supports voice cloning via reference.wav (voice: "custom").
+    #
+    # TTL 180s: ~15s load time (downloads model weights to ~/.local/share/tts on
+    # first run). Longer than Kokoro; shorter than Orpheus.
+    #
+    # Voices: Marcos Rudaski (male), Uta Obando (female), Alma María, and more.
+    # API:  POST http://localhost:8080/v1/audio/speech
+    #   { "model": "xtts-tts", "input": "...", "voice": "Marcos Rudaski" }
+    #   { "model": "xtts-tts", "input": "...", "voice": "custom" }  ← clones ~/AI/reference.wav
+    #   Optional: "language": "es" (default) | "en" | "fr" | "de" | "pt" | ...
+    xtts-tts:
+        cmd: /Users/andermurias/AI/scripts/start-xtts.sh ${PORT}
+        checkEndpoint: /health
+        ttl: 180
+
     # ── Chat · MLX — Gemma 3 12B QAT (Quantization-Aware Training) ──────────
     # Same architecture as gemma-3-12b-it but trained with QAT — better quality
     # at 4-bit than post-training quantization. Recommended daily driver.
@@ -349,3 +405,113 @@ models:
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/gemma-3-12b-it-4bit"
         ttl: 120
+
+    # ── Image Generation · ComfyUI-backed ───────────────────────────────────────
+    # Each preset is a bundled ComfyUI workflow. The wrapper embeds ComfyUI,
+    # enhances prompts via LLM, and returns b64_json images.
+    # RAM: ~7 GB (checkpoint) — fits in llm swap group.
+
+    cyber-portrait:
+        cmd: |
+            /Users/andermurias/AI/ComfyUI/.venv/bin/python
+            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
+            --workflow portrait
+            --enhance-url http://localhost:8080/v1/chat/completions
+            --enhance-model gemma-4-e4b-it-6bit-mlx
+        checkEndpoint: /health
+        useModelName: "cyber-portrait"
+        ttl: 300
+
+    cyber-photo:
+        cmd: |
+            /Users/andermurias/AI/ComfyUI/.venv/bin/python
+            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
+            --workflow photo
+            --enhance-url http://localhost:8080/v1/chat/completions
+            --enhance-model gemma-4-e4b-it-6bit-mlx
+        checkEndpoint: /health
+        useModelName: "cyber-photo"
+        ttl: 300
+
+    cyber-anime:
+        cmd: |
+            /Users/andermurias/AI/ComfyUI/.venv/bin/python
+            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
+            --workflow anime
+            --enhance-url http://localhost:8080/v1/chat/completions
+            --enhance-model gemma-4-e4b-it-6bit-mlx
+        checkEndpoint: /health
+        useModelName: "cyber-anime"
+        ttl: 300
+
+    cyber-ipadapter:
+        cmd: |
+            /Users/andermurias/AI/ComfyUI/.venv/bin/python
+            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
+            --workflow ipadapter
+            --enhance-url http://localhost:8080/v1/chat/completions
+            --enhance-model gemma-4-e4b-it-6bit-mlx
+        checkEndpoint: /health
+        useModelName: "cyber-ipadapter"
+        ttl: 300
+
+    cyber-upscale:
+        cmd: |
+            /Users/andermurias/AI/ComfyUI/.venv/bin/python
+            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
+            --workflow upscale
+            --enhance-url http://localhost:8080/v1/chat/completions
+            --enhance-model gemma-4-e4b-it-6bit-mlx
+        checkEndpoint: /health
+        useModelName: "cyber-upscale"
+        ttl: 300
+
+    # ── New LLMs · 2025 additions ───────────────────────────────────────────────
+
+    # Fast coding / reasoning · DeepSeek-R1 distilled on Llama-8B
+    # ~4.5 GB, ~20–25 tok/s. Shows <think> reasoning chain.
+    deepseek-r1-llama-8b:
+        cmd: |
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 16384
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 2147483648
+        useModelName: "mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit"
+        ttl: 300
+
+    # High-quality 9B · mixed-precision (sensitive layers 8-bit)
+    # ~6 GB, better quality than uniform 4-bit. Replaces existing qwen3.5-9b.
+    qwen3.5-9b-optiq:
+        cmd: |
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/Qwen3.5-9B-OptiQ-4bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 16384
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 2147483648
+        useModelName: "mlx-community/Qwen3.5-9B-OptiQ-4bit"
+        ttl: 300
+
+    # Larger model · Qwen3-14B dense
+    # ~8.3 GB, best for complex tasks when speed is less critical.
+    qwen3-14b:
+        cmd: |
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/Qwen3-14B-4bit
+            --host 127.0.0.1
+            --port ${PORT}
+            --log-level WARNING
+            --max-tokens 16384
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 2147483648
+        useModelName: "mlx-community/Qwen3-14B-4bit"
+        ttl: 300

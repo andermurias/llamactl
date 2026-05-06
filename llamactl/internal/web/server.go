@@ -100,6 +100,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/presets/apply", s.handlePresetsApply)
 	s.mux.HandleFunc("/api/presets/delete", s.handlePresetsDelete)
 
+	// ── API: voices (XTTS) ────────────────────────────────────────────────
+	s.mux.HandleFunc("/api/voices", s.handleVoicesList)
+	s.mux.HandleFunc("/api/voices/upload", s.handleVoicesUpload)
+	s.mux.HandleFunc("/api/voices/delete", s.handleVoicesDelete)
+
 	// ── AI proxy: transparent forward to llama-swap with SSE keepalive ───
 	// Routes all /v1/* and /upstream/* requests to llama-swap (:8080)
 	// and injects `: keepalive N\n\n` SSE comments every 15s during the

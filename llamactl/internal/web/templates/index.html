@@ -12,8 +12,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
   <!-- js-yaml — YAML validation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-  <!-- Lucide icons -->
-  <script src="https://unpkg.com/lucide@0.379.0/dist/umd/lucide.min.js" defer></script>
   <!-- Fonts: Manrope (UI) + JetBrains Mono (code/metrics) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,6 +41,7 @@
 
     /* ── Reset & base ───────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    [hidden] { display: none !important; }
     html { -webkit-text-size-adjust: 100%; }
     body {
       background: var(--bg);
@@ -141,8 +140,7 @@
     }
     .nav-item svg { width: 15px; height: 15px; flex-shrink: 0; opacity: .6; }
     .nav-item.active svg { opacity: 1; }
-    .nav-item i[data-lucide] { width: 15px; height: 15px; flex-shrink: 0; opacity: .6; }
-    .nav-item.active i[data-lucide] { opacity: 1; }
+    .icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: middle; flex-shrink: 0; }
     .nav-count {
       margin-left: auto;
       font-size: 10.5px; font-weight: 600; color: var(--text-3);
@@ -449,6 +447,25 @@
 </head>
 <body>
 
+<!-- ── Icon sprite (inline SVG — no CDN needed) ──────────────────────────── -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="icon-refresh-cw" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></symbol>
+  <symbol id="icon-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="icon-alert-triangle" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="icon-list" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+  <symbol id="icon-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="icon-message-square" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="icon-hash" viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></symbol>
+  <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></symbol>
+  <symbol id="icon-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+  <symbol id="icon-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+  <symbol id="icon-activity" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+  <symbol id="icon-sliders" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="14" cy="6" r="2.5"/><circle cx="8" cy="12" r="2.5"/><circle cx="16" cy="18" r="2.5"/></symbol>
+  <symbol id="icon-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+  <symbol id="icon-external-link" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></symbol>
+</svg>
+
 <!-- Sidebar overlay (mobile) -->
 <div class="sidebar-overlay" id="overlay" onclick="closeSidebar()"></div>
 
@@ -525,6 +542,20 @@
         <span class="svc-name">ComfyUI</span>
         <span class="svc-meta">{{if .ComfyUI.IsRunning}}pid {{.ComfyUI.PID}}{{else}}stopped{{end}}</span>
       </div>
+
+      <!-- Model quick-switcher -->
+      <div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border)">
+        <label style="font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px; display:block">Quick Load Model</label>
+        <select id="quick-model-select" onchange="quickLoadModel(this.value)" style="width:100%; padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; cursor:pointer">
+          <option value="">Select model…</option>
+          {{range .Models.APIModels}}
+          {{$meta := index $.Models.MetaMap .ID}}
+          {{if or (eq $meta.Backend "MLX") (eq $meta.Backend "GGUF")}}
+          <option value="{{.ID}}">{{.ID}}</option>
+          {{end}}
+          {{end}}
+        </select>
+      </div>
     </div>
 
     <!-- Nav items -->
@@ -541,6 +572,18 @@
         </svg>
         Models
         <span class="nav-count">{{len .Models.APIModels}}</span>
+      </button>
+      <button class="nav-item" id="nav-images" onclick="showSection('images')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+        </svg>
+        Images
+      </button>
+      <button class="nav-item" id="nav-voices" onclick="showSection('voices')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+        Voices
       </button>
       <button class="nav-item" id="nav-discover" onclick="showSection('discover')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -581,12 +624,12 @@
     <div class="sidebar-footer">
       <button class="nav-item" style="color:var(--text-3);font-size:12px"
               onclick="location.reload()">
-        <i data-lucide="refresh-cw" style="width:14px;height:14px;flex-shrink:0;opacity:.6"></i>
+        <svg class="icon" width="14" height="14" style="opacity:.6"><use href="#icon-refresh-cw"/></svg>
         Refresh
       </button>
       <button class="nav-item" style="color:var(--text-3);font-size:12px"
               onclick="showVersionsPanel()">
-        <i data-lucide="info" style="width:14px;height:14px;flex-shrink:0;opacity:.6"></i>
+        <svg class="icon" width="14" height="14" style="opacity:.6"><use href="#icon-info"/></svg>
         About
       </button>
     </div>
@@ -749,7 +792,7 @@
         <!-- System Health -->
         <div class="card" id="sys-health-card">
           <div class="card-header"><span class="card-title">System Health</span>
-            <button class="btn btn-sm btn-default" style="margin-left:auto" onclick="loadRunningModel()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
+            <button class="btn btn-sm btn-default" style="margin-left:auto" onclick="loadRunningModel()"><svg class="icon" width="12" height="12"><use href="#icon-refresh-cw"/></svg> Refresh</button>
           </div>
           <div id="sys-health-content" style="padding:4px 0 8px">
             <div style="color:var(--text-3);font-size:12px">Loading…</div>
@@ -761,20 +804,20 @@
           <div class="card-header"><span class="card-title">Quick Links &amp; Resources</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px">
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/models" target="_blank" class="btn btn-sm btn-default">
-              <i data-lucide="list" style="width:12px;height:12px"></i> /v1/models
+              <svg class="icon" width="12" height="12"><use href="#icon-list"/></svg> /v1/models
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/running" target="_blank" class="btn btn-sm btn-default">
-              <i data-lucide="zap" style="width:12px;height:12px"></i> /running
+              <svg class="icon" width="12" height="12"><use href="#icon-zap"/></svg> /running
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/chat/completions" target="_blank" class="btn btn-sm btn-default">
-              <i data-lucide="message-square" style="width:12px;height:12px"></i> Chat API
+              <svg class="icon" width="12" height="12"><use href="#icon-message-square"/></svg> Chat API
             </a>
             <a href="http://{{.LlamaSwap.APIAddr}}/v1/embeddings" target="_blank" class="btn btn-sm btn-default">
-              <i data-lucide="hash" style="width:12px;height:12px"></i> Embeddings
+              <svg class="icon" width="12" height="12"><use href="#icon-hash"/></svg> Embeddings
             </a>
             {{if .ComfyUI.IsRunning}}
             <a href="http://{{.ComfyUI.URL}}" target="_blank" class="btn btn-sm btn-default">
-              <i data-lucide="image" style="width:12px;height:12px"></i> ComfyUI
+              <svg class="icon" width="12" height="12"><use href="#icon-image"/></svg> ComfyUI
             </a>
             {{end}}
           </div>
@@ -791,7 +834,7 @@
         <!-- Restart banner (shown after config changes) -->
         <div class="restart-banner" id="restart-banner">
           <span class="restart-banner-msg">
-            <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:middle;margin-right:5px"></i>Pending restart
+            <svg class="icon" width="14" height="14" style="margin-right:5px"><use href="#icon-alert-triangle"/></svg>Pending restart
             <span class="restart-banner-sub">Model config changed — restart llama-swap to apply.</span>
           </span>
           <button class="btn btn-sm btn-default" onclick="dismissRestartBanner()">Later</button>
@@ -806,7 +849,7 @@
               <select id="test-model" style="padding:6px 10px; background:var(--bg-2,var(--surface2)); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:12px">
                 {{range .Models.APIModels}}<option value="{{.ID}}">{{.ID}}</option>{{end}}
               </select>
-              <button class="btn btn-sm btn-default" onclick="closeTestDrawer()"><i data-lucide="x" style="width:12px;height:12px"></i></button>
+              <button class="btn btn-sm btn-default" onclick="closeTestDrawer()"><svg class="icon" width="12" height="12"><use href="#icon-x"/></svg></button>
             </div>
           </div>
           <textarea id="test-prompt" class="test-input" rows="2" placeholder="Type a message… (Enter to send, Shift+Enter for newline)"
@@ -835,8 +878,8 @@
                 <thead>
                   <tr>
                     <th>Model</th>
-                    <th>Backend</th>
                     <th>Size</th>
+                    <th>~RAM</th>
                     <th>Status</th>
                     <th style="text-align:right">Actions</th>
                   </tr>
@@ -845,18 +888,22 @@
                   {{range .Models.APIModels}}
                   {{$meta := index $.Models.MetaMap .ID}}
                   <tr>
-                    <td class="mono-text">{{.ID}}{{if $meta.CtxSize}}<span style="font-size:10px; color:var(--text-3); margin-left:6px">{{$meta.CtxSize}}k ctx</span>{{end}}</td>
                     <td>
-                      {{if $meta.Backend}}
-                        {{if eq $meta.Backend "MLX"}}<span class="badge badge-mlx">MLX</span>
-                        {{else if eq $meta.Backend "GGUF"}}<span class="badge badge-gguf">GGUF</span>
-                        {{else if eq $meta.Backend "TTS"}}<span class="badge badge-tts">TTS</span>
-                        {{else if eq $meta.Backend "STT"}}<span class="badge badge-stt">STT</span>
-                        {{else}}<span class="badge badge-api">API</span>
+                      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                        <span class="mono-text">{{.ID}}</span>
+                        {{if $meta.Backend}}
+                          {{if eq $meta.Backend "MLX"}}<span class="badge badge-mlx">MLX</span>
+                          {{else if eq $meta.Backend "GGUF"}}<span class="badge badge-gguf">GGUF</span>
+                          {{else if eq $meta.Backend "TTS"}}<span class="badge badge-tts">TTS</span>
+                          {{else if eq $meta.Backend "STT"}}<span class="badge badge-stt">STT</span>
+                          {{else}}<span class="badge badge-api">{{$meta.Backend}}</span>
+                          {{end}}
                         {{end}}
-                      {{else}}<span class="badge badge-api">—</span>{{end}}
+                        {{if $meta.CtxSize}}<span style="font-size:10px;color:var(--text-3)">{{$meta.CtxSize}}k ctx</span>{{end}}
+                      </div>
                     </td>
-                    <td id="file-size-{{.ID}}" style="font-size:11.5px;color:var(--text-3)">…</td>
+                    <td id="file-size-{{.ID}}" data-presize="{{$meta.SizeBytes}}" style="font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums">…</td>
+                    <td id="ram-est-{{.ID}}" style="font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums">…</td>
                     <td>
                       {{if index $.Models.LoadedIDs .ID}}
                         <span class="badge badge-green">&#9679; loaded</span>
@@ -868,7 +915,7 @@
                       <button class="btn btn-sm btn-default"
                               onclick="testModel('{{.ID}}', this)" title="Send a test prompt and measure latency">Test</button>
                       <button class="btn btn-sm btn-default"
-                              onclick="openConfigurePanel('{{.ID}}')" title="Configure model parameters"><i data-lucide="sliders-horizontal" style="width:12px;height:12px"></i> Configure</button>
+                              onclick="openConfigurePanel('{{.ID}}')" title="Configure model parameters"><svg class="icon" width="12" height="12"><use href="#icon-sliders"/></svg> Configure</button>
                       <button class="btn btn-sm btn-default"
                               onclick="modelAction('disable','{{.ID}}')">Disable</button>
                       <button class="btn btn-sm btn-danger"
@@ -914,7 +961,7 @@
         <!-- Curated recommended models (auto-loaded on open) -->
         <div id="curated-card" class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
           <div style="padding:12px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px"><i data-lucide="star" style="width:14px;height:14px;color:var(--yellow)"></i> Recommended for your Mac</span>
+            <span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px"><svg class="icon" width="14" height="14" style="color:var(--yellow)"><use href="#icon-star"/></svg> Recommended for your Mac</span>
             <span id="curated-status" style="font-size:11.5px;color:var(--text-3)">Loading…</span>
           </div>
           <div class="table-wrap">
@@ -1062,7 +1109,7 @@
         <div class="card" style="padding:20px; margin-top:10px">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
             <span style="font-size:13px; font-weight:600">Memory</span>
-            <button class="btn btn-sm btn-default" onclick="loadSystemInfo()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
+            <button class="btn btn-sm btn-default" onclick="loadSystemInfo()"><svg class="icon" width="12" height="12"><use href="#icon-refresh-cw"/></svg> Refresh</button>
           </div>
           <div id="sys-ram-bars" style="display:flex; flex-direction:column; gap:8px">
             <span style="font-size:12px; color:var(--text-3)">Loading…</span>
@@ -1082,7 +1129,7 @@
         <div class="card" style="padding:20px; margin-top:10px">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
             <span style="font-size:13px; font-weight:600">AI Stack Processes</span>
-            <button class="btn btn-sm btn-default" onclick="loadProcesses()"><i data-lucide="refresh-cw" style="width:12px;height:12px"></i> Refresh</button>
+            <button class="btn btn-sm btn-default" onclick="loadProcesses()"><svg class="icon" width="12" height="12"><use href="#icon-refresh-cw"/></svg> Refresh</button>
           </div>
           <div id="sys-processes">
             <span style="font-size:12px; color:var(--text-3)">Loading…</span>
@@ -1156,6 +1203,120 @@
         </div>
       </div><!-- /sec-config -->
 
+      <!-- ════════════════════════════════════════════════════════════════
+           IMAGES
+      ═══════════════════════════════════════════════════════════════════ -->
+      <div id="sec-images" class="section">
+        <h1 class="section-title">Image Generation</h1>
+        <p class="section-sub">Generate images with ComfyUI-backed presets.</p>
+
+        <div class="card" style="padding:20px">
+          <div style="display:flex; flex-direction:column; gap:12px">
+            <div>
+              <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Prompt</label>
+              <textarea id="img-prompt" class="test-input" rows="3" placeholder="Describe the image you want to generate…"></textarea>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap">
+              <div style="flex:1; min-width:140px">
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Preset</label>
+                <select id="img-preset" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px">
+                  <option value="cyber-portrait">Portrait</option>
+                  <option value="cyber-photo">Photo-realistic</option>
+                  <option value="cyber-anime">Anime / Stylized</option>
+                  <option value="cyber-ipadapter">IP-Adapter</option>
+                  <option value="cyber-upscale">Upscale</option>
+                </select>
+              </div>
+              <div style="flex:1; min-width:140px">
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Size</label>
+                <select id="img-size" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px">
+                  <option value="768x1024">768 × 1024</option>
+                  <option value="1024x1024">1024 × 1024</option>
+                  <option value="1024x576">1024 × 576</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end">
+              <div style="flex:1; min-width:140px">
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Steps</label>
+                <input id="img-steps" type="range" min="10" max="50" value="25" style="width:100%" oninput="document.getElementById('img-steps-val').textContent=this.value">
+                <div style="text-align:center; font-size:11px; color:var(--text-3); margin-top:2px"><span id="img-steps-val">25</span></div>
+              </div>
+              <div style="flex:1; min-width:140px">
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">CFG Scale</label>
+                <input id="img-cfg" type="range" min="1" max="15" value="7" step="0.5" style="width:100%" oninput="document.getElementById('img-cfg-val').textContent=this.value">
+                <div style="text-align:center; font-size:11px; color:var(--text-3); margin-top:2px"><span id="img-cfg-val">7</span></div>
+              </div>
+              <div style="flex:1; min-width:140px">
+                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Seed</label>
+                <div style="display:flex; gap:6px">
+                  <input id="img-seed" type="number" value="-1" style="flex:1; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px" placeholder="-1 = random">
+                  <button class="btn btn-sm btn-default" onclick="document.getElementById('img-seed').value=-1" title="Random">🎲</button>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px">
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); cursor:pointer">
+                <input type="checkbox" id="img-enhance" checked style="accent-color:var(--blue)">
+                Enhance prompt with LLM
+              </label>
+            </div>
+            <div id="img-ref-row" style="display:none">
+              <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Reference Image (IP-Adapter)</label>
+              <input type="file" id="img-ref" accept="image/*" style="font-size:12px; color:var(--text-2)">
+              <div style="display:flex; gap:8px; margin-top:6px">
+                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="face" checked> Face</label>
+                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="style"> Style</label>
+                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="both"> Both</label>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px">
+              <span id="img-status" style="font-size:12px; color:var(--text-3); align-self:center"></span>
+              <button class="btn btn-primary" id="img-generate-btn" onclick="generateImage()">Generate</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="img-output-card" class="card" style="display:none; padding:20px">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
+            <span style="font-size:13px; font-weight:600">Result</span>
+            <button class="btn btn-sm btn-default" onclick="downloadImage()">💾 Download</button>
+          </div>
+          <img id="img-output" style="max-width:100%; border-radius:8px; border:1px solid var(--border)" alt="Generated image">
+        </div>
+      </div><!-- /sec-images -->
+
+      <!-- ════════════════════════════════════════════════════════════════
+           VOICES
+      ═══════════════════════════════════════════════════════════════════ -->
+      <div id="sec-voices" class="section">
+        <h1 class="section-title">Voices</h1>
+        <p class="section-sub">Upload custom voice samples for XTTS voice cloning.</p>
+
+        <div class="card" style="padding:20px">
+          <div style="display:flex; flex-direction:column; gap:12px">
+            <div>
+              <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Upload Voice</label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap">
+                <input type="file" id="voice-file" accept=".wav,.mp3,.ogg,.flac" style="flex:1; min-width:180px; font-size:12px; color:var(--text-2); padding:6px">
+                <input type="text" id="voice-name" placeholder="voice-name" style="padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px; min-width:120px">
+                <button class="btn btn-primary" onclick="uploadVoice()">Upload</button>
+              </div>
+              <p style="font-size:11px; color:var(--text-3); margin-top:6px">Supported: WAV, MP3, OGG, FLAC. Max 10 MB. 6–30 seconds recommended.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0; overflow:hidden; margin-top:10px">
+          <div style="padding:14px 20px; border-bottom:1px solid var(--border)">
+            <span style="font-size:13px; font-weight:600">Uploaded Voices</span>
+          </div>
+          <div id="voices-list">
+            <div style="padding:20px; text-align:center; color:var(--text-3); font-size:12px">Loading…</div>
+          </div>
+        </div>
+      </div><!-- /sec-voices -->
+
     </div><!-- /.page -->
   </div><!-- /.main -->
 </div><!-- /.layout -->
@@ -1176,7 +1337,7 @@ function closeSidebar() {
 }
 
 // ── Section navigation ─────────────────────────────────────────────────────
-const SECTIONS = ['services', 'models', 'logs', 'config', 'discover', 'analytics', 'system'];
+const SECTIONS = ['services', 'models', 'images', 'voices', 'logs', 'config', 'discover', 'analytics', 'system'];
 let activeSection = 'services';
 
 function showSection(name) {
@@ -2184,21 +2345,50 @@ function statCard(label, val) {
 
 // ── Model files info ─────────────────────────────────────────────────────────
 var _modelFilesLoaded = false;
+function fmtBytes(b) {
+  if (!b || b <= 0) return '—';
+  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+  if (b >= 1048576)    return (b / 1048576).toFixed(0) + ' MB';
+  return (b / 1024).toFixed(0) + ' KB';
+}
 function loadModelFiles() {
   _modelFilesLoaded = true;
+  // Show server-side pre-populated sizes immediately (before API call returns)
+  document.querySelectorAll('[data-presize]').forEach(function(el) {
+    var sz = parseInt(el.dataset.presize, 10);
+    if (sz > 0) { el.textContent = fmtBytes(sz); el.style.color = ''; }
+    else { el.textContent = '…'; }
+    var modelId = el.id.replace('file-size-', '');
+    var ramCell = document.getElementById('ram-est-' + modelId);
+    if (ramCell && sz > 0) {
+      var ramGB = sz / 1e9;
+      ramCell.textContent = ramGB.toFixed(1) + ' GB';
+      ramCell.style.color = ramGB > 10.5 ? 'var(--red)' : 'var(--text-2)';
+    }
+  });
+  // Then fetch accurate sizes from the file scanner
   fetch('/api/models/files').then(function(r) { return r.json(); }).then(function(entries) {
     entries.forEach(function(e) {
       var cell = document.getElementById('file-size-' + e.model_id);
       if (!cell) return;
-      if (e.exists && e.size_bytes > 0) {
-        var gb = (e.size_bytes / 1073741824).toFixed(1);
-        cell.textContent = gb + ' GB';
-        cell.title = e.path;
+      if (e.size_bytes > 0) {
+        cell.textContent = fmtBytes(e.size_bytes);
+        if (e.path) cell.title = e.path;
         cell.style.color = '';
-      } else {
+      } else if (parseInt(cell.dataset.presize, 10) <= 0) {
         cell.textContent = '—';
-        cell.style.color = 'var(--red)';
-        cell.title = 'File not found';
+        cell.style.color = 'var(--text-3)';
+      }
+      var ramCell = document.getElementById('ram-est-' + e.model_id);
+      if (ramCell) {
+        if (e.size_bytes > 0) {
+          var ramGB = e.size_bytes / 1e9;
+          ramCell.textContent = ramGB.toFixed(1) + ' GB';
+          ramCell.style.color = ramGB > 10.5 ? 'var(--red)' : 'var(--text-2)';
+        } else if (parseInt(cell.dataset.presize, 10) <= 0) {
+          ramCell.textContent = '—';
+          ramCell.style.color = 'var(--text-3)';
+        }
       }
     });
   }).catch(function() {});
@@ -2440,7 +2630,6 @@ function openConfigurePanel(modelID) {
 
       document.getElementById('configure-overlay').hidden = false;
       document.getElementById('configure-panel').hidden = false;
-      if (typeof lucide !== 'undefined') lucide.createIcons();
     })
     .catch(function(e) { alert('Failed to load config: ' + e); });
 }
@@ -2548,23 +2737,38 @@ function _updateEstimate() {
   var budget = 10.5;
 
   var est = _computeRAMEstimate(backend, meta, values);
-  var pct = function(gb) { return Math.min(100, gb / budget * 100).toFixed(1) + '%'; };
+  var overBudget = est.totalGB > budget;
+  // When over budget, scale all segments to total so they sum to 100% of the bar.
+  // When under budget, scale to budget so the bar shows utilisation.
+  var scale = overBudget ? est.totalGB : budget;
+  var pct = function(gb) { return (gb / scale * 100).toFixed(1) + '%'; };
 
   document.getElementById('ram-seg-weights').style.width  = pct(est.weightsGB);
   document.getElementById('ram-seg-kvcache').style.width  = pct(est.kvCacheGB);
   document.getElementById('ram-seg-overhead').style.width = pct(est.overheadGB);
 
-  document.getElementById('ram-summary').textContent = est.totalGB.toFixed(1) + ' GB / ' + budget + ' GB';
+  var ovSeg = document.getElementById('ram-seg-overflow');
+  if (overBudget) {
+    ovSeg.style.width = pct(est.totalGB - budget);
+    ovSeg.style.display = '';
+  } else {
+    ovSeg.style.display = 'none';
+  }
+
+  var summaryEl = document.getElementById('ram-summary');
+  summaryEl.textContent = est.totalGB.toFixed(1) + ' GB';
+  summaryEl.style.color = overBudget ? 'var(--red)' : '';
+
   document.getElementById('legend-weights').textContent  = est.weightsGB.toFixed(1) + ' GB';
   document.getElementById('legend-kvcache').textContent  = est.kvCacheGB.toFixed(2) + ' GB';
   document.getElementById('legend-overhead').textContent = est.overheadGB.toFixed(2) + ' GB';
 
   var fitBadge = document.getElementById('ram-fit-badge');
-  if (est.totalGB <= budget) {
+  if (!overBudget) {
     fitBadge.textContent = '✓ Fits';
     fitBadge.className = 'badge badge-green';
   } else {
-    fitBadge.textContent = '✗ Over budget';
+    fitBadge.textContent = '+' + (est.totalGB - budget).toFixed(1) + ' GB over';
     fitBadge.className = 'badge badge-red';
   }
 
@@ -2577,6 +2781,12 @@ function _computeRAMEstimate(backend, meta, values) {
   var overheadGB = 0.35;
   var kvCacheGB  = 0;
   var tps        = 0;
+
+  // For MLX: if file_size_bytes is unknown, estimate from architecture
+  if (weightsGB === 0 && meta.num_layers && meta.hidden_size && meta.num_heads) {
+    var params = 12 * meta.num_layers * meta.hidden_size * meta.hidden_size;
+    weightsGB = params * 0.5 / 1e9; // 4-bit ≈ 0.5 bytes/param
+  }
 
   if (backend === 'llamaserver') {
     var ctxSize  = values['ctx_size']  || 4096;
@@ -2635,10 +2845,187 @@ function saveModelConfig() {
   .catch(function(e) { statusEl.textContent = '✗ ' + e; });
 }
 
-// ── Lucide icon initialisation ────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+// ── Image Generation ─────────────────────────────────────────────────────────
+
+function generateImage() {
+  var prompt = document.getElementById('img-prompt').value.trim();
+  if (!prompt) { showToast('Prompt required', 'warn', 'Enter a description for the image.'); return; }
+
+  var preset = document.getElementById('img-preset').value;
+  var size = document.getElementById('img-size').value;
+  var steps = parseInt(document.getElementById('img-steps').value, 10);
+  var cfg = parseFloat(document.getElementById('img-cfg').value);
+  var seed = parseInt(document.getElementById('img-seed').value, 10) || -1;
+  var enhance = document.getElementById('img-enhance').checked;
+  var status = document.getElementById('img-status');
+  var btn = document.getElementById('img-generate-btn');
+  var outputCard = document.getElementById('img-output-card');
+  var outputImg = document.getElementById('img-output');
+
+  btn.disabled = true;
+  status.textContent = 'Loading model…';
+  outputCard.style.display = 'none';
+
+  var body = {
+    prompt: prompt,
+    model: preset,
+    size: size,
+    steps: steps,
+    cfg_scale: cfg,
+    seed: seed,
+    skip_enhance: !enhance,
+    response_format: 'b64_json'
+  };
+
+  fetch('http://localhost:8080/v1/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  .then(function(r) {
+    if (r.status === 429) { throw new Error('Another generation in progress. Please wait.'); }
+    if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); }); }
+    return r.json();
+  })
+  .then(function(data) {
+    if (data.data && data.data[0] && data.data[0].b64_json) {
+      outputImg.src = 'data:image/png;base64,' + data.data[0].b64_json;
+      outputCard.style.display = '';
+      status.textContent = '';
+      showToast('Image generated', 'success');
+    } else {
+      throw new Error('No image in response');
+    }
+  })
+  .catch(function(e) {
+    status.textContent = '';
+    showToast('Generation failed', 'error', e.message);
+  })
+  .finally(function() {
+    btn.disabled = false;
+  });
+}
+
+function downloadImage() {
+  var img = document.getElementById('img-output');
+  var a = document.createElement('a');
+  a.href = img.src;
+  a.download = 'llamagen-' + Date.now() + '.png';
+  a.click();
+}
+
+// Show/hide reference image upload for ipadapter preset
+document.getElementById('img-preset').addEventListener('change', function() {
+  document.getElementById('img-ref-row').style.display = this.value === 'cyber-ipadapter' ? '' : 'none';
 });
+
+// ── Voice Management ─────────────────────────────────────────────────────────
+
+function uploadVoice() {
+  var fileInput = document.getElementById('voice-file');
+  var nameInput = document.getElementById('voice-name');
+  if (!fileInput.files || !fileInput.files[0]) {
+    showToast('Select a file', 'warn');
+    return;
+  }
+  var file = fileInput.files[0];
+  var name = nameInput.value.trim();
+  if (!name) { name = file.name.replace(/\.[^/.]+$/, ''); }
+
+  var form = new FormData();
+  form.append('voice', file);
+  form.append('name', name);
+
+  fetch('/api/voices/upload', { method: 'POST', body: form })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.error) { showToast('Upload failed', 'error', data.error); return; }
+    showToast('Voice uploaded', 'success', data.name);
+    fileInput.value = '';
+    nameInput.value = '';
+    loadVoices();
+  })
+  .catch(function(e) { showToast('Upload failed', 'error', e.message); });
+}
+
+function loadVoices() {
+  fetch('/api/voices')
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var container = document.getElementById('voices-list');
+    var voices = data.voices || [];
+    if (voices.length === 0) {
+      container.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-3); font-size:12px">No voices uploaded yet.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Size</th><th>Actions</th></tr></thead><tbody>' +
+      voices.map(function(v) {
+        var size = v.size_bytes < 1024*1024 ? (v.size_bytes/1024).toFixed(1)+' KB' : (v.size_bytes/1024/1024).toFixed(1)+' MB';
+        return '<tr><td class="mono-text">' + v.name + '</td><td style="font-size:12px;color:var(--text-2)">' + size + '</td><td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="deleteVoice(\'' + v.name + '\')">Remove</button></td></tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  })
+  .catch(function(e) {
+    document.getElementById('voices-list').innerHTML = '<div style="padding:20px; text-align:center; color:var(--red); font-size:12px">Error: ' + e.message + '</div>';
+  });
+}
+
+function deleteVoice(name) {
+  showModal({
+    title: 'Remove voice',
+    body: 'Remove "' + name + '"?',
+    actions: [
+      { label: 'Cancel', cls: 'btn-default' },
+      { label: 'Remove', cls: 'btn-danger', fn: function() {
+        fetch('/api/voices/delete?name=' + encodeURIComponent(name), { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) { showToast('Error', 'error', data.error); return; }
+          showToast('Voice removed', 'success');
+          loadVoices();
+        })
+        .catch(function(e) { showToast('Error', 'error', e.message); });
+      }}
+    ]
+  });
+}
+
+// Load voices when section is shown
+var _origShowSection2 = showSection;
+showSection = function(name) {
+  _origShowSection2(name);
+  if (name === 'voices') loadVoices();
+};
+
+// ── Model Quick-Switcher ─────────────────────────────────────────────────────
+
+function quickLoadModel(modelID) {
+  if (!modelID) return;
+  var select = document.getElementById('quick-model-select');
+  select.disabled = true;
+  showToast('Loading ' + modelID + '…', 'info', 'Warming up model — this may take 15–30s.');
+
+  fetch('http://localhost:8080/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: modelID, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })
+  })
+  .then(function(r) {
+    select.disabled = false;
+    select.value = '';
+    if (r.ok) {
+      showToast(modelID + ' ready', 'success', 'Model loaded and ready for inference.');
+    } else {
+      return r.text().then(function(t) { throw new Error(t); });
+    }
+  })
+  .catch(function(e) {
+    select.disabled = false;
+    select.value = '';
+    showToast('Load failed', 'error', e.message.slice(0, 200));
+  });
+}
+
 </script>
 
 <!-- ── Configure Model Panel ──────────────────────────────────────────────── -->
@@ -2649,13 +3036,13 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="configure-panel-header">
     <div style="display:flex;flex-direction:column;gap:6px;min-width:0">
       <div style="display:flex;align-items:center;gap:8px">
-        <i data-lucide="sliders-horizontal" style="width:15px;height:15px;flex-shrink:0;color:var(--text-3)"></i>
+        <svg class="icon" width="15" height="15" style="color:var(--text-3)"><use href="#icon-sliders"/></svg>
         <span id="configure-panel-title" style="font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Configure Model</span>
       </div>
       <span id="configure-backend-badge" class="badge" style="align-self:flex-start"></span>
     </div>
     <button class="btn btn-sm btn-default configure-close-btn" onclick="closeConfigurePanel()" title="Close" style="flex-shrink:0;padding:5px 8px">
-      <i data-lucide="x" style="width:14px;height:14px"></i>
+      <svg class="icon" width="14" height="14"><use href="#icon-x"/></svg>
     </button>
   </div>
 
@@ -2682,6 +3069,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div id="ram-seg-weights"  class="configure-ram-seg" style="background:var(--blue)"   title="Model weights"></div>
         <div id="ram-seg-kvcache"  class="configure-ram-seg" style="background:var(--yellow)" title="KV cache"></div>
         <div id="ram-seg-overhead" class="configure-ram-seg" style="background:var(--border2)" title="Process overhead"></div>
+        <div id="ram-seg-overflow" class="configure-ram-seg" style="background:var(--red);display:none;box-shadow:-2px 0 0 var(--surface)" title="Over budget"></div>
       </div>
       <div class="configure-ram-legend">
         <div class="configure-ram-legend-item">
@@ -2708,7 +3096,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div class="configure-tps-row">
         <span class="configure-tps-label">
-          <i data-lucide="gauge" style="width:13px;height:13px;vertical-align:middle;margin-right:4px"></i>
+          <svg class="icon" width="13" height="13" style="margin-right:4px"><use href="#icon-activity"/></svg>
           Performance estimate
         </span>
         <span>
@@ -2729,7 +3117,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <!-- Fixed footer -->
   <div class="configure-actions">
     <button class="btn btn-success btn-sm" onclick="saveModelConfig()">
-      <i data-lucide="save" style="width:13px;height:13px"></i>
+      <svg class="icon" width="13" height="13"><use href="#icon-save"/></svg>
       Apply & Save
     </button>
     <button class="btn btn-sm btn-default" onclick="closeConfigurePanel()">Cancel</button>

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -904,25 +905,29 @@ func (s *Server) handleModelFiles(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		case "MLX":
-			// Derive HF cache path from model ID
-			// E.g. gemma-3-12b-it-mlx → look in mlx-community/gemma-3-12b-it directories
-			baseID := strings.TrimSuffix(m.ID, "-mlx")
-			candidates := []string{
-				"mlx-community--" + baseID + "-4bit",
-				"mlx-community--" + baseID + "-8bit",
-				"mlx-community--" + baseID + "-6bit",
-				"mlx-community--" + baseID,
-			}
-			for _, cand := range candidates {
-				dir := filepath.Join(hfCache, "models--"+strings.ReplaceAll(cand, "/", "--"))
-				if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
-					entry.Path = dir
-					// Get approx size
-					if sz, err := dirSizeApprox(dir); err == nil {
-						entry.SizeBytes = sz
+			// Use the SizeBytes already computed from HF cache by parseModelMeta
+			if meta.SizeBytes > 0 {
+				entry.SizeBytes = meta.SizeBytes
+				entry.Exists = true
+			} else {
+				// Fallback: search HF cache by model ID pattern
+				baseID := strings.TrimSuffix(m.ID, "-mlx")
+				candidates := []string{
+					"mlx-community--" + baseID + "-4bit",
+					"mlx-community--" + baseID + "-8bit",
+					"mlx-community--" + baseID + "-6bit",
+					"mlx-community--" + baseID,
+				}
+				for _, cand := range candidates {
+					dir := filepath.Join(hfCache, "models--"+strings.ReplaceAll(cand, "/", "--"))
+					if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+						entry.Path = dir
+						if sz, err := dirSizeApprox(dir); err == nil {
+							entry.SizeBytes = sz
+						}
+						entry.Exists = true
+						break
 					}
-					entry.Exists = true
-					break
 				}
 			}
 		}
@@ -1228,6 +1233,16 @@ func (s *Server) handleModelConfigGet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// For MLX models, FileSizeBytes may be 0 if the model predates the metadata
+	// cache feature. Fall back to the HF cache size already computed by the
+	// service layer, and persist it so future requests are instant.
+	if meta.FileSizeBytes == 0 && backend == "mlxlm" {
+		if svcMeta := service.GetModelsInfo(s.cfg).MetaMap[modelID]; svcMeta.SizeBytes > 0 {
+			meta.FileSizeBytes = svcMeta.SizeBytes
+			_ = modelconfig.UpsertMeta("", meta)
+		}
+	}
+
 	estimate := modelconfig.EstimateRAM(backend, meta, values)
 
 	jsonOK(w, modelconfig.ConfigState{
@@ -1355,6 +1370,134 @@ func replaceModelCmd(yamlContent, modelID, newCmd string) (string, error) {
 		return "", fmt.Errorf("marshal yaml: %w", err)
 	}
 	return string(out), nil
+}
+
+// ── Voices (XTTS) ─────────────────────────────────────────────────────────────
+
+// handleVoicesList returns all uploaded voice files.
+// GET /api/voices
+func (s *Server) handleVoicesList(w http.ResponseWriter, r *http.Request) {
+	if !getOnly(w, r) {
+		return
+	}
+	voicesDir := s.cfg.VoicesDir
+	_ = os.MkdirAll(voicesDir, 0o755)
+	entries, err := os.ReadDir(voicesDir)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	type voiceInfo struct {
+		Name     string `json:"name"`
+		Size     int64  `json:"size_bytes"`
+		Modified string `json:"modified"`
+	}
+	var voices []voiceInfo
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !isAudioFile(name) {
+			continue
+		}
+		info, _ := e.Info()
+		if info != nil {
+			voices = append(voices, voiceInfo{
+				Name:     name,
+				Size:     info.Size(),
+				Modified: info.ModTime().Format(time.RFC3339),
+			})
+		}
+	}
+	jsonOK(w, map[string]any{"voices": voices})
+}
+
+func isAudioFile(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".wav" || ext == ".mp3" || ext == ".ogg" || ext == ".flac"
+}
+
+// handleVoicesUpload accepts a multipart audio file upload.
+// POST /api/voices/upload
+func (s *Server) handleVoicesUpload(w http.ResponseWriter, r *http.Request) {
+	if !postOnly(w, r) {
+		return
+	}
+	voicesDir := s.cfg.VoicesDir
+	_ = os.MkdirAll(voicesDir, 0o755)
+
+	// Parse multipart form (max 10 MB)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		jsonErr(w, http.StatusBadRequest, "parse form: "+err.Error())
+		return
+	}
+
+	file, header, err := r.FormFile("voice")
+	if err != nil {
+		jsonErr(w, http.StatusBadRequest, "voice file required")
+		return
+	}
+	defer file.Close()
+
+	name := r.FormValue("name")
+	if name == "" {
+		name = strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(name) {
+		jsonErr(w, http.StatusBadRequest, "name must match [a-zA-Z0-9_-]+")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !isAudioFile(header.Filename) {
+		jsonErr(w, http.StatusBadRequest, "unsupported audio format (wav, mp3, ogg, flac)")
+		return
+	}
+
+	destPath := filepath.Join(voicesDir, name+ext)
+	dest, err := os.Create(destPath)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "create file: "+err.Error())
+		return
+	}
+	defer dest.Close()
+
+	if _, err := io.Copy(dest, file); err != nil {
+		jsonErr(w, http.StatusInternalServerError, "write file: "+err.Error())
+		return
+	}
+
+	jsonOK(w, map[string]any{"ok": true, "name": name + ext, "path": destPath})
+}
+
+// handleVoicesDelete removes a voice file.
+// DELETE /api/voices?name=<file>
+func (s *Server) handleVoicesDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "DELETE or POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		jsonErr(w, http.StatusBadRequest, "name parameter required")
+		return
+	}
+	voicesDir := s.cfg.VoicesDir
+	path := filepath.Join(voicesDir, filepath.Clean(name))
+	if !strings.HasPrefix(path, voicesDir) {
+		jsonErr(w, http.StatusBadRequest, "invalid name")
+		return
+	}
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			jsonErr(w, http.StatusNotFound, "voice not found")
+			return
+		}
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, map[string]bool{"ok": true})
 }
 
 // yamlFindKey finds the value node for the given key in a mapping node.
