@@ -1274,7 +1274,7 @@
                     <option value="improve">Improve / Upscale</option>
                   </select>
                 </div>
-                <div id="img-upload-area" style="display:none">
+                <div id="img-upload-area">
                   <input type="file" id="img-ref" accept="image/*" style="display:none">
                   <div id="img-dropzone" onclick="document.getElementById('img-ref').click()" style="border:2px dashed var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer; transition:border-color .15s">
                     <svg class="icon" width="24" height="24" style="color:var(--text-3); margin-bottom:6px"><use href="#icon-image"/></svg>
@@ -2952,14 +2952,6 @@ function downloadImage() {
 
 // ── Base Image Upload handlers ───────────────────────────────────────────────
 
-function updateImageModeUI() {
-  var mode = document.getElementById('img-mode').value;
-  var uploadArea = document.getElementById('img-upload-area');
-  uploadArea.style.display = mode === 'none' ? 'none' : '';
-}
-
-document.getElementById('img-mode').addEventListener('change', updateImageModeUI);
-
 function handleImageFile(file) {
   if (!file) return;
   var preview = document.getElementById('img-preview');
@@ -3010,10 +3002,7 @@ document.getElementById('img-preset').addEventListener('change', function() {
     modeSelect.value = 'improve';
   } else if (this.value === 'cyber-ipadapter') {
     modeSelect.value = 'character';
-  } else {
-    // Keep current mode unless it was forced by a different preset
   }
-  updateImageModeUI();
 });
 
 // ── Voice Management ─────────────────────────────────────────────────────────
