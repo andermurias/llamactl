@@ -1790,10 +1790,10 @@ function runTest() {
   out.classList.add('show');
   status.textContent = 'Streaming…';
 
-  fetch('http://localhost:8080/v1/chat/completions', {
+  fetch('/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: model, messages: [{ role: 'user', content: prompt }], stream: true })
+    body: JSON.stringify({ model: modelID, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })
   })
   .then(function(r) {
     if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); });
@@ -2877,25 +2877,52 @@ function generateImage() {
     response_format: 'b64_json'
   };
 
-  fetch('http://localhost:8080/v1/images/generations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-  .then(function(r) {
-    if (r.status === 429) { throw new Error('Another generation in progress. Please wait.'); }
-    if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); }); }
-    return r.json();
-  })
-  .then(function(data) {
-    if (data.data && data.data[0] && data.data[0].b64_json) {
-      outputImg.src = 'data:image/png;base64,' + data.data[0].b64_json;
-      outputCard.style.display = '';
+  var refFile = document.getElementById('img-ref').files[0];
+  var refMode = document.querySelector('input[name="img-ref-mode"]:checked');
+  if (refMode) body.ipadapter_mode = refMode.value;
+
+  function _doFetch() {
+    fetch('/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) {
+      if (r.status === 429) { throw new Error('Another generation is in progress. Please wait.'); }
+      if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); }); }
+      return r.json();
+    })
+    .then(function(data) {
+      if (data.data && data.data[0] && data.data[0].b64_json) {
+        outputImg.src = 'data:image/png;base64,' + data.data[0].b64_json;
+        outputCard.style.display = '';
+        status.textContent = '';
+        showToast('Image generated', 'success');
+      } else {
+        throw new Error('No image in response');
+      }
+    })
+    .catch(function(e) {
       status.textContent = '';
-      showToast('Image generated', 'success');
-    } else {
-      throw new Error('No image in response');
-    }
+      showToast('Generation failed', 'error', e.message);
+    })
+    .finally(function() {
+      btn.disabled = false;
+    });
+  }
+
+  if (refFile) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      body.reference_image = base64;
+      _doFetch();
+    };
+    reader.readAsDataURL(refFile);
+  } else {
+    _doFetch();
+  }
+}
   })
   .catch(function(e) {
     status.textContent = '';
@@ -2914,9 +2941,10 @@ function downloadImage() {
   a.click();
 }
 
-// Show/hide reference image upload for ipadapter preset
+// Show/hide reference image upload for presets that need an input image
 document.getElementById('img-preset').addEventListener('change', function() {
-  document.getElementById('img-ref-row').style.display = this.value === 'cyber-ipadapter' ? '' : 'none';
+  var needsRef = this.value === 'cyber-ipadapter' || this.value === 'cyber-upscale';
+  document.getElementById('img-ref-row').style.display = needsRef ? '' : 'none';
 });
 
 // ── Voice Management ─────────────────────────────────────────────────────────
@@ -3005,7 +3033,7 @@ function quickLoadModel(modelID) {
   select.disabled = true;
   showToast('Loading ' + modelID + '…', 'info', 'Warming up model — this may take 15–30s.');
 
-  fetch('http://localhost:8080/v1/chat/completions', {
+  fetch('/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: modelID, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 })

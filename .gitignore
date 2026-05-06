@@ -58,3 +58,6 @@ build/
 # ── Local tooling / runtime ───────────────────────────────────────────────────
 .claude/
 xtts-fastapi/voices/
+xtts-fastapi/.python-version
+xtts-fastapi/uv.lock
+docs/superpowers/plans/

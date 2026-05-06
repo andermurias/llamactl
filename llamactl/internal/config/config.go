@@ -68,6 +68,6 @@ func Load() *Config {
 		WebLogFile:    filepath.Join(logDir, "llamactl-web.log"),
 		DisabledFile:  filepath.Join(aiDir, "llamactl-disabled.yaml"),
 		ModelsDir:     filepath.Join(aiDir, "models"),
-		VoicesDir:     filepath.Join(aiDir, "voices"),
+		VoicesDir:     filepath.Join(aiDir, "xtts-fastapi", "voices"),
 	}
 }

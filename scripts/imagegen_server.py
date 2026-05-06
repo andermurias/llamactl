@@ -148,31 +148,82 @@ def load_workflow(preset_name: str) -> dict:
         return json.load(f)
 
 
-def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps: int, cfg: float, width: int, height: int, checkpoint: str = "cyberrealisticPony_v170.safetensors") -> dict:
-    """Inject user settings into a ComfyUI workflow template."""
+def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps: int, cfg: float, width: int, height: int, checkpoint: str = "cyberrealisticPony_v170.safetensors", reference_image: str = "") -> dict:
+    """Inject user settings into a ComfyUI workflow template.
+    When reference_image is provided (base64), the workflow is converted
+    from txt2img to img2img by replacing EmptyLatentImage with LoadImage+VAEEncode."""
     wf = json.loads(json.dumps(workflow))  # deep copy
-    for node in wf.values():
+    vae_node_id = None
+    latent_src_node_id = None
+
+    for nid, node in list(wf.items()):
         if not isinstance(node, dict):
             continue
         inputs = node.get("inputs", {})
+        cls = node.get("class_type", "").lower()
+
         # Positive prompt
-        if "text" in inputs and node.get("class_type", "").lower().endswith("clip_text_encode"):
+        if "text" in inputs and cls.endswith("clip_text_encode"):
             inputs["text"] = prompt
-        # Negative prompt (second text encode or explicit negative node)
+        # Negative prompt
         if "text" in inputs and node.get("_meta", {}).get("title", "").lower() in ("negative prompt", "negative"):
             inputs["text"] = negative
         # KSampler
-        if node.get("class_type", "").lower().endswith("ksampler"):
+        if cls.endswith("ksampler"):
             inputs["seed"] = seed if seed >= 0 else int(time.time() * 1000) % (2**32)
             inputs["steps"] = steps
             inputs["cfg"] = cfg
+            # Remember where latent_image comes from for img2img conversion
+            latent_ref = inputs.get("latent_image")
+            if isinstance(latent_ref, list) and len(latent_ref) == 2:
+                latent_src_node_id = str(latent_ref[0])
         # Empty latent image (resolution)
-        if node.get("class_type", "").lower().endswith("emptylatentimage"):
+        if cls.endswith("emptylatentimage"):
             inputs["width"] = width
             inputs["height"] = height
-        # Checkpoint loader
-        if node.get("class_type", "").lower().endswith("checkpointloadersimple"):
+        # Checkpoint loader — capture VAE output for VAEEncode
+        if cls.endswith("checkpointloadersimple"):
             inputs["ckpt_name"] = checkpoint
+            vae_node_id = nid
+
+    # ── img2img conversion when reference image is provided ──
+    if reference_image and vae_node_id and latent_src_node_id:
+        # Save base64 image to ComfyUI input folder
+        img_name = f"llamagen_ref_{uuid.uuid4().hex[:8]}.png"
+        img_path = Path(COMFYUI_DIR) / "input" / img_name
+        img_path.parent.mkdir(parents=True, exist_ok=True)
+        img_data = base64.b64decode(reference_image)
+        img_path.write_bytes(img_data)
+
+        max_id = max(int(k) for k in wf.keys() if k.isdigit())
+        load_id = str(max_id + 1)
+        encode_id = str(max_id + 2)
+
+        # Add LoadImage node
+        wf[load_id] = {
+            "inputs": {"image": img_name},
+            "class_type": "LoadImage",
+            "_meta": {"title": "Load Image"}
+        }
+        # Add VAEEncode node
+        wf[encode_id] = {
+            "inputs": {
+                "pixels": [load_id, 0],
+                "vae": [vae_node_id, 2]
+            },
+            "class_type": "VAEEncode",
+            "_meta": {"title": "VAE Encode"}
+        }
+        # Repoint KSampler latent_image from EmptyLatentImage to VAEEncode
+        ksampler_node = wf.get(latent_src_node_id)
+        if ksampler_node and ksampler_node.get("class_type", "").lower().endswith("ksampler"):
+            ksampler_node["inputs"]["latent_image"] = [encode_id, 0]
+        # Set denoise strength for img2img
+        if cls.endswith("ksampler"):
+            for node in wf.values():
+                if isinstance(node, dict) and node.get("class_type", "").lower().endswith("ksampler"):
+                    node["inputs"]["denoise"] = 0.75
+
     return wf
 
 
@@ -334,7 +385,7 @@ async def _do_generate(req: GenerationRequest) -> dict:
     if not negative:
         negative = default_negatives.get(preset, "low quality, blurry")
 
-    workflow = inject_workflow(workflow, positive, negative, req.seed, req.steps, req.cfg_scale, w, h)
+    workflow = inject_workflow(workflow, positive, negative, req.seed, req.steps, req.cfg_scale, w, h, reference_image=req.reference_image)
 
     # 3. Submit to ComfyUI
     client_id = str(uuid.uuid4())
