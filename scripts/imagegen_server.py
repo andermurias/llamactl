@@ -66,6 +66,7 @@ class GenerationRequest(BaseModel):
     cfg_scale: float = Field(default=7.0, ge=1.0, le=15.0)
     reference_image: str = ""  # base64
     ipadapter_mode: str = "face"  # face | style | both
+    image_mode: str = "none"  # none | reference | character | background | improve
     skip_enhance: bool = False
 
 
@@ -148,7 +149,7 @@ def load_workflow(preset_name: str) -> dict:
         return json.load(f)
 
 
-def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps: int, cfg: float, width: int, height: int, checkpoint: str = "cyberrealisticPony_v170.safetensors", reference_image: str = "") -> dict:
+def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps: int, cfg: float, width: int, height: int, checkpoint: str = "cyberrealisticPony_v170.safetensors", reference_image: str = "", image_mode: str = "none") -> dict:
     """Inject user settings into a ComfyUI workflow template.
     When reference_image is provided (base64), the workflow is converted
     from txt2img to img2img by replacing EmptyLatentImage with LoadImage+VAEEncode."""
@@ -187,7 +188,7 @@ def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps
             vae_node_id = nid
 
     # ── img2img conversion when reference image is provided ──
-    if reference_image and vae_node_id and latent_src_node_id:
+    if reference_image and image_mode != "none" and vae_node_id and latent_src_node_id:
         # Save base64 image to ComfyUI input folder
         img_name = f"llamagen_ref_{uuid.uuid4().hex[:8]}.png"
         img_path = Path(COMFYUI_DIR) / "input" / img_name
@@ -218,11 +219,22 @@ def inject_workflow(workflow: dict, prompt: str, negative: str, seed: int, steps
         ksampler_node = wf.get(latent_src_node_id)
         if ksampler_node and ksampler_node.get("class_type", "").lower().endswith("ksampler"):
             ksampler_node["inputs"]["latent_image"] = [encode_id, 0]
-        # Set denoise strength for img2img
-        if cls.endswith("ksampler"):
-            for node in wf.values():
-                if isinstance(node, dict) and node.get("class_type", "").lower().endswith("ksampler"):
-                    node["inputs"]["denoise"] = 0.75
+
+        # Denoise strength per mode:
+        # improve:    0.35  subtle enhancement / upscale
+        # character:  0.55  keep character, change scene/background
+        # reference:  0.75  moderate change, keep composition
+        # background: 0.90  keep subject, change everything else
+        denoise_map = {
+            "improve": 0.35,
+            "character": 0.55,
+            "reference": 0.75,
+            "background": 0.90,
+        }
+        denoise = denoise_map.get(image_mode, 0.75)
+        for node in wf.values():
+            if isinstance(node, dict) and node.get("class_type", "").lower().endswith("ksampler"):
+                node["inputs"]["denoise"] = denoise
 
     return wf
 
@@ -389,7 +401,7 @@ async def _do_generate(req: GenerationRequest) -> dict:
     if not negative:
         negative = default_negatives.get(preset, "low quality, blurry")
 
-    workflow = inject_workflow(workflow, positive, negative, req.seed, req.steps, req.cfg_scale, w, h, reference_image=req.reference_image)
+    workflow = inject_workflow(workflow, positive, negative, req.seed, req.steps, req.cfg_scale, w, h, reference_image=req.reference_image, image_mode=req.image_mode)
 
     # 3. Submit to ComfyUI
     client_id = str(uuid.uuid4())

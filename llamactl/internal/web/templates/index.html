@@ -1261,13 +1261,31 @@
                 Enhance prompt with LLM (may change your prompt)
               </label>
             </div>
-            <div id="img-ref-row" style="display:none">
-              <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Reference Image (IP-Adapter)</label>
-              <input type="file" id="img-ref" accept="image/*" style="font-size:12px; color:var(--text-2)">
-              <div style="display:flex; gap:8px; margin-top:6px">
-                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="face" checked> Face</label>
-                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="style"> Style</label>
-                <label style="font-size:12px; color:var(--text-2)"><input type="radio" name="img-ref-mode" value="both"> Both</label>
+            <!-- Base Image Upload -->
+            <div class="card" style="padding:14px; background:var(--bg-2,var(--surface2)); border-style:dashed">
+              <div style="display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px">
+                  <label style="font-size:12px; color:var(--text-3)">Base Image</label>
+                  <select id="img-mode" style="padding:5px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; cursor:pointer">
+                    <option value="none">Don't use image</option>
+                    <option value="reference">Reference / Style transfer</option>
+                    <option value="character">Character / Keep person</option>
+                    <option value="background">Change background</option>
+                    <option value="improve">Improve / Upscale</option>
+                  </select>
+                </div>
+                <div id="img-upload-area" style="display:none">
+                  <input type="file" id="img-ref" accept="image/*" style="display:none">
+                  <div id="img-dropzone" onclick="document.getElementById('img-ref').click()" style="border:2px dashed var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer; transition:border-color .15s">
+                    <svg class="icon" width="24" height="24" style="color:var(--text-3); margin-bottom:6px"><use href="#icon-image"/></svg>
+                    <div style="font-size:12px; color:var(--text-3)">Click or drop an image here</div>
+                    <div style="font-size:11px; color:var(--text-3); margin-top:2px">JPG, PNG, WEBP</div>
+                  </div>
+                  <div id="img-preview-wrap" style="display:none; margin-top:8px; position:relative">
+                    <img id="img-preview" style="max-height:120px; border-radius:6px; border:1px solid var(--border)">
+                    <button class="btn btn-sm btn-danger" onclick="clearBaseImage()" style="position:absolute; top:4px; right:4px; padding:2px 6px; font-size:10px">✕</button>
+                  </div>
+                </div>
               </div>
             </div>
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px">
@@ -2857,6 +2875,7 @@ function generateImage() {
   var cfg = parseFloat(document.getElementById('img-cfg').value);
   var seed = parseInt(document.getElementById('img-seed').value, 10) || -1;
   var enhance = document.getElementById('img-enhance').checked;
+  var imageMode = document.getElementById('img-mode').value;
   var status = document.getElementById('img-status');
   var btn = document.getElementById('img-generate-btn');
   var outputCard = document.getElementById('img-output-card');
@@ -2874,12 +2893,11 @@ function generateImage() {
     cfg_scale: cfg,
     seed: seed,
     skip_enhance: !enhance,
+    image_mode: imageMode,
     response_format: 'b64_json'
   };
 
   var refFile = document.getElementById('img-ref').files[0];
-  var refMode = document.querySelector('input[name="img-ref-mode"]:checked');
-  if (refMode) body.ipadapter_mode = refMode.value;
 
   function _doFetch() {
     fetch('/v1/images/generations', {
@@ -2911,7 +2929,7 @@ function generateImage() {
     });
   }
 
-  if (refFile) {
+  if (refFile && imageMode !== 'none') {
     var reader = new FileReader();
     reader.onload = function(e) {
       var base64 = e.target.result.split(',')[1];
@@ -2932,10 +2950,70 @@ function downloadImage() {
   a.click();
 }
 
-// Show/hide reference image upload for presets that need an input image
+// ── Base Image Upload handlers ───────────────────────────────────────────────
+
+function updateImageModeUI() {
+  var mode = document.getElementById('img-mode').value;
+  var uploadArea = document.getElementById('img-upload-area');
+  uploadArea.style.display = mode === 'none' ? 'none' : '';
+}
+
+document.getElementById('img-mode').addEventListener('change', updateImageModeUI);
+
+function handleImageFile(file) {
+  if (!file) return;
+  var preview = document.getElementById('img-preview');
+  var wrap = document.getElementById('img-preview-wrap');
+  var dropzone = document.getElementById('img-dropzone');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    preview.src = e.target.result;
+    wrap.style.display = '';
+    dropzone.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearBaseImage() {
+  document.getElementById('img-ref').value = '';
+  document.getElementById('img-preview').src = '';
+  document.getElementById('img-preview-wrap').style.display = 'none';
+  document.getElementById('img-dropzone').style.display = '';
+}
+
+document.getElementById('img-ref').addEventListener('change', function() {
+  if (this.files && this.files[0]) handleImageFile(this.files[0]);
+});
+
+// Drag-and-drop on dropzone
+var dropzone = document.getElementById('img-dropzone');
+if (dropzone) {
+  dropzone.addEventListener('dragover', function(e) { e.preventDefault(); this.style.borderColor = 'var(--blue)'; });
+  dropzone.addEventListener('dragleave', function(e) { e.preventDefault(); this.style.borderColor = ''; });
+  dropzone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.style.borderColor = '';
+    var files = e.dataTransfer.files;
+    if (files && files[0]) {
+      var dt = new DataTransfer();
+      dt.items.add(files[0]);
+      document.getElementById('img-ref').files = dt.files;
+      handleImageFile(files[0]);
+    }
+  });
+}
+
+// Auto-select mode when preset changes
 document.getElementById('img-preset').addEventListener('change', function() {
-  var needsRef = this.value === 'cyber-ipadapter' || this.value === 'cyber-upscale';
-  document.getElementById('img-ref-row').style.display = needsRef ? '' : 'none';
+  var modeSelect = document.getElementById('img-mode');
+  if (this.value === 'cyber-upscale') {
+    modeSelect.value = 'improve';
+  } else if (this.value === 'cyber-ipadapter') {
+    modeSelect.value = 'character';
+  } else {
+    // Keep current mode unless it was forced by a different preset
+  }
+  updateImageModeUI();
 });
 
 // ── Voice Management ─────────────────────────────────────────────────────────
