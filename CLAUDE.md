@@ -130,11 +130,6 @@ The web UI (`localhost:3333`) embeds all HTML/JS/CSS into the binary via `//go:e
 | `deepseek-r1-llama-8b` | mlx_lm.server | Fast coding / reasoning (~20 tok/s) | ~4.5 GB |
 | `qwen3.5-9b-optiq` | mlx_lm.server | High-quality 9B (mixed-precision) | ~6 GB |
 | `qwen3-14b` | mlx_lm.server | Large model for complex tasks | ~8.3 GB |
-| `cyber-portrait` | imagegen_server.py | Image generation — portrait | ~7 GB |
-| `cyber-photo` | imagegen_server.py | Image generation — photo-realistic | ~7 GB |
-| `cyber-anime` | imagegen_server.py | Image generation — anime/stylized | ~7 GB |
-| `cyber-ipadapter` | imagegen_server.py | Image generation — face/style reference | ~7 GB |
-| `cyber-upscale` | imagegen_server.py | Image generation — upscale | ~7 GB |
 
 `mistral-small-3.1-24b` exceeds the 120s health-check timeout on first load — excluded from inference smoke test by default. Set `LLAMACTL_TEST_LARGE=1` to include it.
 
@@ -266,40 +261,6 @@ Three engines, all expose OpenAI-compatible `/v1/audio/speech`:
 - **Kokoro-FastAPI** (`Kokoro-FastAPI/`) — 20+ voices, streaming, word timestamps. Best for English.
 - **Orpheus-FastAPI** (`Orpheus-FastAPI/`) — Emotion tags (`<laugh>`, `<sigh>`), 24 voices. Best for Spanish/Italian.
 - **voxtral-tts.c** (`voxtral-tts.c/`) — Pure C, no Python. Build: `make apple` (macOS Accelerate), `make blas` (Linux), `make cuda` (NVIDIA).
-
-## Image Generation
-
-Image generation runs through llama-swap via `scripts/imagegen_server.py`, a FastAPI wrapper that embeds ComfyUI on demand.
-
-**Presets** (model names):
-| Model | Workflow | Resolution |
-|-------|----------|------------|
-| `cyber-portrait` | Face detailer, shallow DoF | 768×1024 |
-| `cyber-photo` | Natural lighting, full scene | 1024×1024 |
-| `cyber-anime` | Vibrant, stylized | 768×1024 |
-| `cyber-ipadapter` | Face/style reference image | 768×1024 |
-| `cyber-upscale` | 2x/4x detail recovery | 512×512 |
-
-**API**: `POST http://localhost:8080/v1/images/generations`
-```json
-{
-  "prompt": "a cat in space",
-  "model": "cyber-portrait",
-  "size": "768x1024",
-  "steps": 25,
-  "cfg_scale": 7.0,
-  "seed": -1,
-  "response_format": "b64_json"
-}
-```
-
-**Features**:
-- Prompt enhancement via configurable LLM (`--enhance-url`, `--enhance-model`)
-- Single-request concurrency (429 on overlap)
-- ComfyUI lifecycle fully embedded (starts on wrapper boot, dies on TTL)
-- Workflow JSONs bundled in `scripts/workflows/*.json`
-
-**Dependencies**: `pip install -r scripts/imagegen-requirements.txt` (fastapi, uvicorn, httpx, pydantic)
 
 ## Voice Management (XTTS)
 

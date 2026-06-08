@@ -51,12 +51,6 @@ groups:
             - gemma-4-e4b-it-6bit-mlx
             - gemma-4-e4b-it-gguf
             - gemma-3-12b-it-mlx
-            # ── Image generation · ComfyUI-backed ─────────────────────────────────────
-            - cyber-portrait
-            - cyber-photo
-            - cyber-anime
-            - cyber-ipadapter
-            - cyber-upscale
             # ── New LLMs · 2025 ───────────────────────────────────────────────────────
             - deepseek-r1-llama-8b
             - qwen3.5-9b-optiq
@@ -405,66 +399,6 @@ models:
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/gemma-3-12b-it-4bit"
         ttl: 120
-
-    # ── Image Generation · ComfyUI-backed ───────────────────────────────────────
-    # Each preset is a bundled ComfyUI workflow. The wrapper embeds ComfyUI,
-    # enhances prompts via LLM, and returns b64_json images.
-    # RAM: ~7 GB (checkpoint) — fits in llm swap group.
-
-    cyber-portrait:
-        cmd: |
-            /Users/andermurias/AI/ComfyUI/.venv/bin/python
-            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
-            --workflow portrait
-            --enhance-url http://localhost:8080/v1/chat/completions
-            --enhance-model gemma-4-e4b-it-6bit-mlx
-        checkEndpoint: /health
-        useModelName: "cyber-portrait"
-        ttl: 300
-
-    cyber-photo:
-        cmd: |
-            /Users/andermurias/AI/ComfyUI/.venv/bin/python
-            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
-            --workflow photo
-            --enhance-url http://localhost:8080/v1/chat/completions
-            --enhance-model gemma-4-e4b-it-6bit-mlx
-        checkEndpoint: /health
-        useModelName: "cyber-photo"
-        ttl: 300
-
-    cyber-anime:
-        cmd: |
-            /Users/andermurias/AI/ComfyUI/.venv/bin/python
-            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
-            --workflow anime
-            --enhance-url http://localhost:8080/v1/chat/completions
-            --enhance-model gemma-4-e4b-it-6bit-mlx
-        checkEndpoint: /health
-        useModelName: "cyber-anime"
-        ttl: 300
-
-    cyber-ipadapter:
-        cmd: |
-            /Users/andermurias/AI/ComfyUI/.venv/bin/python
-            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
-            --workflow ipadapter
-            --enhance-url http://localhost:8080/v1/chat/completions
-            --enhance-model gemma-4-e4b-it-6bit-mlx
-        checkEndpoint: /health
-        useModelName: "cyber-ipadapter"
-        ttl: 300
-
-    cyber-upscale:
-        cmd: |
-            /Users/andermurias/AI/ComfyUI/.venv/bin/python
-            /Users/andermurias/AI/scripts/imagegen_server.py ${PORT}
-            --workflow upscale
-            --enhance-url http://localhost:8080/v1/chat/completions
-            --enhance-model gemma-4-e4b-it-6bit-mlx
-        checkEndpoint: /health
-        useModelName: "cyber-upscale"
-        ttl: 300
 
     # ── New LLMs · 2025 additions ───────────────────────────────────────────────
 

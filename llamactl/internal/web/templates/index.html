@@ -573,12 +573,6 @@
         Models
         <span class="nav-count">{{len .Models.APIModels}}</span>
       </button>
-      <button class="nav-item" id="nav-images" onclick="showSection('images')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-        </svg>
-        Images
-      </button>
       <button class="nav-item" id="nav-voices" onclick="showSection('voices')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
@@ -1206,105 +1200,6 @@
       <!-- ════════════════════════════════════════════════════════════════
            IMAGES
       ═══════════════════════════════════════════════════════════════════ -->
-      <div id="sec-images" class="section">
-        <h1 class="section-title">Image Generation</h1>
-        <p class="section-sub">Generate images with ComfyUI-backed presets.</p>
-
-        <div class="card" style="padding:20px">
-          <div style="display:flex; flex-direction:column; gap:12px">
-            <div>
-              <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Prompt</label>
-              <textarea id="img-prompt" class="test-input" rows="3" placeholder="Describe the image you want to generate…"></textarea>
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap">
-              <div style="flex:1; min-width:140px">
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Preset</label>
-                <select id="img-preset" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px">
-                  <option value="cyber-portrait">Portrait</option>
-                  <option value="cyber-photo">Photo-realistic</option>
-                  <option value="cyber-anime">Anime / Stylized</option>
-                  <option value="cyber-ipadapter">IP-Adapter</option>
-                  <option value="cyber-upscale">Upscale</option>
-                </select>
-              </div>
-              <div style="flex:1; min-width:140px">
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Size</label>
-                <select id="img-size" style="width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px">
-                  <option value="768x1024">768 × 1024</option>
-                  <option value="1024x1024">1024 × 1024</option>
-                  <option value="1024x576">1024 × 576</option>
-                </select>
-              </div>
-            </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end">
-              <div style="flex:1; min-width:140px">
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Steps</label>
-                <input id="img-steps" type="range" min="10" max="50" value="25" style="width:100%" oninput="document.getElementById('img-steps-val').textContent=this.value">
-                <div style="text-align:center; font-size:11px; color:var(--text-3); margin-top:2px"><span id="img-steps-val">25</span></div>
-              </div>
-              <div style="flex:1; min-width:140px">
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">CFG Scale</label>
-                <input id="img-cfg" type="range" min="1" max="15" value="7" step="0.5" style="width:100%" oninput="document.getElementById('img-cfg-val').textContent=this.value">
-                <div style="text-align:center; font-size:11px; color:var(--text-3); margin-top:2px"><span id="img-cfg-val">7</span></div>
-              </div>
-              <div style="flex:1; min-width:140px">
-                <label style="font-size:12px; color:var(--text-3); display:block; margin-bottom:4px">Seed</label>
-                <div style="display:flex; gap:6px">
-                  <input id="img-seed" type="number" value="-1" style="flex:1; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px" placeholder="-1 = random">
-                  <button class="btn btn-sm btn-default" onclick="document.getElementById('img-seed').value=-1" title="Random">🎲</button>
-                </div>
-              </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px">
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); cursor:pointer">
-                <input type="checkbox" id="img-enhance" style="accent-color:var(--blue)">
-                Enhance prompt with LLM (may change your prompt)
-              </label>
-            </div>
-            <!-- Base Image Upload -->
-            <div class="card" style="padding:14px; background:var(--bg-2,var(--surface2)); border-style:dashed">
-              <div style="display:flex; flex-direction:column; gap:10px">
-                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px">
-                  <label style="font-size:12px; color:var(--text-3)">Base Image</label>
-                  <select id="img-mode" style="padding:5px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; cursor:pointer">
-                    <option value="none">Don't use image</option>
-                    <option value="reference">Reference / Style transfer</option>
-                    <option value="character">Character / Keep person</option>
-                    <option value="background">Change background</option>
-                    <option value="improve">Improve / Upscale</option>
-                  </select>
-                </div>
-                <div id="img-upload-area">
-                  <!-- Dropzone with invisible file input overlay -->
-                  <div id="img-dropzone" style="position:relative; border:2px dashed var(--border); border-radius:8px; padding:16px; text-align:center; cursor:pointer; transition:border-color .15s; min-height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center">
-                    <input type="file" id="img-ref" accept="image/*" style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2">
-                    <svg class="icon" width="24" height="24" style="color:var(--text-3); margin-bottom:6px; pointer-events:none"><use href="#icon-image"/></svg>
-                    <div style="font-size:12px; color:var(--text-3); pointer-events:none">Click or drop an image here</div>
-                    <div style="font-size:11px; color:var(--text-3); margin-top:2px; pointer-events:none">JPG, PNG, WEBP</div>
-                  </div>
-                  <div id="img-preview-wrap" style="display:none; margin-top:8px; position:relative">
-                    <img id="img-preview" style="max-height:120px; border-radius:6px; border:1px solid var(--border)">
-                    <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); clearBaseImage();" style="position:absolute; top:4px; right:4px; padding:2px 6px; font-size:10px; z-index:3">✕</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px">
-              <span id="img-status" style="font-size:12px; color:var(--text-3); align-self:center"></span>
-              <button class="btn btn-primary" id="img-generate-btn" onclick="generateImage()">Generate</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="img-output-card" class="card" style="display:none; padding:20px">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px">
-            <span style="font-size:13px; font-weight:600">Result</span>
-            <button class="btn btn-sm btn-default" onclick="downloadImage()">💾 Download</button>
-          </div>
-          <img id="img-output" style="max-width:100%; border-radius:8px; border:1px solid var(--border)" alt="Generated image">
-        </div>
-      </div><!-- /sec-images -->
-
       <!-- ════════════════════════════════════════════════════════════════
            VOICES
       ═══════════════════════════════════════════════════════════════════ -->
@@ -1356,7 +1251,7 @@ function closeSidebar() {
 }
 
 // ── Section navigation ─────────────────────────────────────────────────────
-const SECTIONS = ['services', 'models', 'images', 'voices', 'logs', 'config', 'discover', 'analytics', 'system'];
+const SECTIONS = ['services', 'models', 'voices', 'logs', 'config', 'discover', 'analytics', 'system'];
 let activeSection = 'services';
 
 function showSection(name) {
@@ -2863,149 +2758,6 @@ function saveModelConfig() {
   })
   .catch(function(e) { statusEl.textContent = '✗ ' + e; });
 }
-
-// ── Image Generation ─────────────────────────────────────────────────────────
-
-function generateImage() {
-  var prompt = document.getElementById('img-prompt').value.trim();
-  if (!prompt) { showToast('Prompt required', 'warn', 'Enter a description for the image.'); return; }
-
-  var preset = document.getElementById('img-preset').value;
-  var size = document.getElementById('img-size').value;
-  var steps = parseInt(document.getElementById('img-steps').value, 10);
-  var cfg = parseFloat(document.getElementById('img-cfg').value);
-  var seed = parseInt(document.getElementById('img-seed').value, 10) || -1;
-  var enhance = document.getElementById('img-enhance').checked;
-  var imageMode = document.getElementById('img-mode').value;
-  var status = document.getElementById('img-status');
-  var btn = document.getElementById('img-generate-btn');
-  var outputCard = document.getElementById('img-output-card');
-  var outputImg = document.getElementById('img-output');
-
-  btn.disabled = true;
-  status.textContent = 'Loading model…';
-  outputCard.style.display = 'none';
-
-  var body = {
-    prompt: prompt,
-    model: preset,
-    size: size,
-    steps: steps,
-    cfg_scale: cfg,
-    seed: seed,
-    skip_enhance: !enhance,
-    image_mode: imageMode,
-    response_format: 'b64_json'
-  };
-
-  var refFile = document.getElementById('img-ref').files[0];
-
-  function _doFetch() {
-    fetch('/v1/images/generations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    })
-    .then(function(r) {
-      if (r.status === 429) { throw new Error('Another generation is in progress. Please wait.'); }
-      if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t); }); }
-      return r.json();
-    })
-    .then(function(data) {
-      if (data.data && data.data[0] && data.data[0].b64_json) {
-        outputImg.src = 'data:image/png;base64,' + data.data[0].b64_json;
-        outputCard.style.display = '';
-        status.textContent = '';
-        showToast('Image generated', 'success');
-      } else {
-        throw new Error('No image in response');
-      }
-    })
-    .catch(function(e) {
-      status.textContent = '';
-      showToast('Generation failed', 'error', e.message);
-    })
-    .finally(function() {
-      btn.disabled = false;
-    });
-  }
-
-  if (refFile && imageMode !== 'none') {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var base64 = e.target.result.split(',')[1];
-      body.reference_image = base64;
-      _doFetch();
-    };
-    reader.readAsDataURL(refFile);
-  } else {
-    _doFetch();
-  }
-}
-
-function downloadImage() {
-  var img = document.getElementById('img-output');
-  var a = document.createElement('a');
-  a.href = img.src;
-  a.download = 'llamagen-' + Date.now() + '.png';
-  a.click();
-}
-
-// ── Base Image Upload handlers ───────────────────────────────────────────────
-
-function handleImageFile(file) {
-  if (!file) return;
-  var preview = document.getElementById('img-preview');
-  var wrap = document.getElementById('img-preview-wrap');
-  var dropzone = document.getElementById('img-dropzone');
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    preview.src = e.target.result;
-    wrap.style.display = '';
-    dropzone.style.display = 'none';
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearBaseImage() {
-  document.getElementById('img-ref').value = '';
-  document.getElementById('img-preview').src = '';
-  document.getElementById('img-preview-wrap').style.display = 'none';
-  document.getElementById('img-dropzone').style.display = '';
-}
-
-document.getElementById('img-ref').addEventListener('change', function() {
-  if (this.files && this.files[0]) handleImageFile(this.files[0]);
-});
-
-// Drag-and-drop on upload area (covers both dropzone and invisible input)
-var uploadArea = document.getElementById('img-upload-area');
-if (uploadArea) {
-  uploadArea.addEventListener('dragover', function(e) { e.preventDefault(); var dz = document.getElementById('img-dropzone'); if (dz) dz.style.borderColor = 'var(--blue)'; });
-  uploadArea.addEventListener('dragleave', function(e) { e.preventDefault(); var dz = document.getElementById('img-dropzone'); if (dz) dz.style.borderColor = ''; });
-  uploadArea.addEventListener('drop', function(e) {
-    e.preventDefault();
-    var dz = document.getElementById('img-dropzone');
-    if (dz) dz.style.borderColor = '';
-    var files = e.dataTransfer.files;
-    if (files && files[0]) {
-      var dt = new DataTransfer();
-      dt.items.add(files[0]);
-      document.getElementById('img-ref').files = dt.files;
-      handleImageFile(files[0]);
-    }
-  });
-}
-
-// Auto-select mode when preset changes
-document.getElementById('img-preset').addEventListener('change', function() {
-  var modeSelect = document.getElementById('img-mode');
-  if (this.value === 'cyber-upscale') {
-    modeSelect.value = 'improve';
-  } else if (this.value === 'cyber-ipadapter') {
-    modeSelect.value = 'character';
-  }
-});
 
 // ── Voice Management ─────────────────────────────────────────────────────────
 
