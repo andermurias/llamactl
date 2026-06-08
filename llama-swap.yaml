@@ -38,71 +38,52 @@ groups:
         swap: true
         exclusive: false
         members:
-            - gemma-3-12b-it
-            - qwen3.5-9b
-            - qwen2.5-3b
-            - qwen2.5-7b
-            - qwen2.5-coder-14b
-            - qwen2.5-14b
-            - phi-4
-            - mistral-nemo-12b
-            - qwen3.5-9b-mlx-mlx
-            - gemma-3-12b-it-qat-mlx
+            - gemma-4-12b-it
             - gemma-4-e4b-it-6bit-mlx
-            - gemma-4-e4b-it-gguf
-            - gemma-3-12b-it-mlx
-            # ── New LLMs · 2025 ───────────────────────────────────────────────────────
-            - deepseek-r1-llama-8b
-            - qwen3.5-9b-optiq
-            - qwen3-14b
+            - qwen3.5-9b
 models:
-    # ── Chat · GGUF (llama.cpp) ───────────────────────────────────────────────
-    # --alias makes /v1/models report the same name clients use in requests.
-    gemma-3-12b-it:
-        cmd: |
-            llama-server
-            --model /Users/andermurias/AI/models/chat/gemma-3-12b-it-Q4_K_M.gguf
-            --alias gemma-3-12b-it
+    # ── Chat · MLX — Gemma 4 12B 4-bit ──────────────────────────────────────
+    # ~8 GB at 4-bit. Strong general-purpose model with good quality/speed.
+    # HF repo: mlx-community/gemma-4-12b-it-4bit
+    gemma-4-12b-it:
+        cmd: |-
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/gemma-4-12b-it-4bit
             --host 127.0.0.1
             --port ${PORT}
-            -ngl 99
-            --ctx-size 32768
-            --parallel 1
-            --log-file /Users/andermurias/AI/logs/inference.log
-        useModelName: "gemma-3-12b-it"
-        ttl: 300
+            --log-level WARNING
+            --max-tokens 32768
+            --prefill-step-size 512
+            --prompt-cache-size 2
+            --prompt-cache-bytes 4294967296
+        useModelName: "mlx-community/gemma-4-12b-it-4bit"
+        checkEndpoint: "/health"
+        concurrencyLimit: 1
+        ttl: 180
 
-    # ── TTS · Voxtral 4B (pure C, Apple Accelerate) ─────────────────────────
-    # Voxtral-4B-TTS-2603 via voxtral-tts.c — self-hosted, no CUDA required.
-    # Built with 'make apple' for NEON + Apple Accelerate BLAS on M4.
-    # NOT always running — llama-swap starts/stops on demand (TTL=600s).
-    # Voices: es_female, es_male (Spanish), neutral_female, casual_male, etc.
-    # API:  POST http://localhost:8080/v1/audio/speech
-    #   { "model": "voxtral-tts", "input": "...", "voice": "es_female", "response_format": "wav" }
-    voxtral-tts:
-        cmd: /Users/andermurias/AI/scripts/start-voxtral.sh ${PORT}
-        checkEndpoint: /health
-        ttl: 600
-    # ── Embeddings · GGUF (llama.cpp) ────────────────────────────────────────
-    nomic-embed-text-v1.5:
-        cmd: |
-            llama-server
-            --model /Users/andermurias/AI/models/embeddings/nomic-embed-text-v1.5.Q8_0.gguf
-            --alias nomic-embed-text-v1.5
+    # ── Chat · MLX — Gemma 4 E4B 6-bit (Effective 4B, 256K context) ─────────
+    # Google Gemma 4 E4B: small 4B dense model with 256K context window.
+    # Fastest Gemma variant — great for low-latency chat and tool calling.
+    # 6-bit quantization: better quality than 4-bit with minimal RAM overhead (~3.5 GB).
+    gemma-4-e4b-it-6bit-mlx:
+        cmd: |-
+            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
+            --model mlx-community/gemma-4-e4b-it-6bit
             --host 127.0.0.1
             --port ${PORT}
-            -ngl 99
-            --ctx-size 2048
-            --batch-size 2048
-            --ubatch-size 2048
-            --parallel 1
-            --embedding
-            --log-file /Users/andermurias/AI/logs/embeddings.log
-        useModelName: "nomic-embed-text-v1.5"
-        ttl: 60
+            --log-level WARNING
+            --max-tokens 32768
+            --prefill-step-size 512
+            --prompt-cache-size 3
+            --prompt-cache-bytes 4294967296
+        useModelName: "mlx-community/gemma-4-e4b-it-6bit"
+        checkEndpoint: "/health"
+        concurrencyLimit: 1
+        ttl: 180
+
     # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
     # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
-    # max-tokens is high because the <think>…</think> block alone can use
+    # max-tokens is high because the  thinking… block alone can use
     # thousands of tokens before the visible answer starts.
     # HF repo: mlx-community/Qwen3.5-9B-MLX-4bit  (~6 GB)
     # ── Memory safety for Qwen3.5-9B ─────────────────────────────────────
@@ -129,181 +110,63 @@ models:
         useModelName: "mlx-community/Qwen3.5-9B-MLX-4bit"
         concurrencyLimit: 1
         ttl: 120
-    # ── Fast · MLX — Qwen 2.5 3B (small, 128 k context) ─────────────────────
-    # ~2 GB, loads in seconds, native 128 k token window.
-    # HF repo: mlx-community/Qwen2.5-3B-Instruct-4bit
-    qwen2.5-3b:
+
+    # ── TTS · Voxtral 4B (pure C, Apple Accelerate) ─────────────────────────
+    # Voxtral-4B-TTS-2603 via voxtral-tts.c — self-hosted, no CUDA required.
+    # Built with 'make apple' for NEON + Apple Accelerate BLAS on M4.
+    # NOT always running — llama-swap starts/stops on demand (TTL=600s).
+    # Voices: es_female, es_male (Spanish), neutral_female, casual_male, etc.
+    # API:  POST http://localhost:8080/v1/audio/speech
+    #   { "model": "voxtral-tts", "input": "...", "voice": "es_female", "response_format": "wav" }
+    voxtral-tts:
+        cmd: /Users/andermurias/AI/scripts/start-voxtral.sh ${PORT}
+        checkEndpoint: /health
+        ttl: 600
+
+    # ── Embeddings · GGUF (llama.cpp) ────────────────────────────────────────
+    nomic-embed-text-v1.5:
         cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen2.5-3B-Instruct-4bit
+            llama-server
+            --model /Users/andermurias/AI/models/embeddings/nomic-embed-text-v1.5.Q8_0.gguf
+            --alias nomic-embed-text-v1.5
             --host 127.0.0.1
             --port ${PORT}
-            --log-level WARNING
-            --max-tokens 8192
-            --prefill-step-size 512
-        useModelName: "mlx-community/Qwen2.5-3B-Instruct-4bit"
-        ttl: 300
-    # ── Long-context analysis · MLX — Qwen 2.5 7B ────────────────────────────
-    # Best model for processing large documents, news feeds, RAG contexts.
-    # 7B at 4-bit ≈ 4.3 GB — leaves >10 GB for a 128K KV cache on 16 GB RAM.
-    # --prefill-step-size 512: smaller chunks = less peak RAM during long prefills,
-    #   prevents OOM crashes (502) when input context is very large (>20K tokens).
-    # --max-tokens 65536: allows long structured output (summaries, reports).
-    # HF repo: mlx-community/Qwen2.5-7B-Instruct-4bit
-    qwen2.5-7b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen2.5-7B-Instruct-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 65536
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 4294967296
-        useModelName: "mlx-community/Qwen2.5-7B-Instruct-4bit"
-        concurrencyLimit: 1
-        ttl: 120
-    # ── Coding · MLX — Qwen 2.5 Coder 14B ───────────────────────────────────
-    # Best coding model that fits in 16 GB. Fine-tuned on code: fill-in-middle,
-    # multi-file edits, repo-level context.
-    # max-tokens 16384 supports generating full source files.
-    # concurrencyLimit 1: prevents two concurrent requests from doubling KV cache
-    #   RAM usage and causing OOM (→ 502). On 16 GB: 8.3 GB weights + KV cache
-    #   leaves ~5 GB; a second concurrent request would exceed available RAM.
-    # prefill-step-size 256: half-sized chunks reduce peak RAM per step.
-    # prompt-cache-size 1: keep only 1 cached KV state; evicts old caches to
-    #   free RAM for the current large request.
-    # HF repo: mlx-community/Qwen2.5-Coder-14B-Instruct-4bit  (~8.3 GB)
-    qwen2.5-coder-14b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen2.5-Coder-14B-Instruct-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 256
-            --prompt-cache-size 1
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit"
-        concurrencyLimit: 1
-        ttl: 120
-    # ── Agent / instructions · MLX — Qwen 2.5 14B ────────────────────────────
-    # Optimised for tool calling, function calling, MCP agents, and complex
-    # system-prompt following. max-tokens 16384 for long tool-call chains.
-    # concurrencyLimit 1 + prefill-step-size 256: OOM protection (see coder-14b).
-    # HF repo: mlx-community/Qwen2.5-14B-Instruct-4bit  (~8.3 GB)
-    qwen2.5-14b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen2.5-14B-Instruct-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 256
-            --prompt-cache-size 1
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/Qwen2.5-14B-Instruct-4bit"
-        concurrencyLimit: 1
-        ttl: 120
-    # ── Alternative · MLX — Microsoft Phi-4 14B ──────────────────────────────
-    # 14 B at 4-bit ≈ 8 GB; strong on STEM, reasoning and coding.
-    # concurrencyLimit 1 + prefill-step-size 256: OOM protection (see coder-14b).
-    # HF repo: mlx-community/phi-4-4bit
-    phi-4:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/phi-4-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 256
-            --prompt-cache-size 1
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/phi-4-4bit"
-        concurrencyLimit: 1
-        ttl: 120
-    # ── Web search / RAG · MLX — Mistral Nemo 12B ────────────────────────────
-    # Designed for RAG, web search synthesis and multilingual responses.
-    # Handles long retrieved contexts well; strong instruction following.
-    # Size: ~7 GB (fits comfortably alongside secondary services)
-    # HF repo: mlx-community/Mistral-Nemo-Instruct-2407-4bit
-    #
-    # Open WebUI: ideal model for "Web Search" mode — select it as the active
-    # model and enable the search toggle; it synthesises results cleanly.
-    mistral-nemo-12b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Mistral-Nemo-Instruct-2407-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 3221225472
-        useModelName: "mlx-community/Mistral-Nemo-Instruct-2407-4bit"
-        concurrencyLimit: 1
-        ttl: 120
+            -ngl 99
+            --ctx-size 2048
+            --batch-size 2048
+            --ubatch-size 2048
+            --parallel 1
+            --embedding
+            --log-file /Users/andermurias/AI/logs/embeddings.log
+        useModelName: "nomic-embed-text-v1.5"
+        ttl: 60
+
     # ── STT — Whisper large-v3-turbo (OpenAI-compatible transcription) ─────────
     # Metal-accelerated speech-to-text using mlx-whisper.
     # Model downloads from HuggingFace on first use (~1.6 GB):
     #   mlx-community/whisper-large-v3-turbo
-    #
-    # Access via llama-swap upstream routing (process managed with idle TTL):
-    #   POST http://localhost:8080/upstream/whisper-stt/v1/audio/transcriptions
-    #
-    # ── OpenWebUI STT configuration ─────────────────────────────────────────
-    # Settings → Audio → Speech to Text:
-    #   Engine:  OpenAI
-    #   API URL: http://<mac-ip>:8080/upstream/whisper-stt/v1
-    #   API Key: local
-    # ────────────────────────────────────────────────────────────────────────
     whisper-stt:
         cmd: /Users/andermurias/AI/scripts/start-whisper.sh ${PORT}
         useModelName: "whisper-stt"
         checkEndpoint: /health
         ttl: 120
+
     # ── TTS — Kokoro 82M (OpenAI-compatible /v1/audio/speech) ────────────────
-    # MPS-accelerated on Apple Silicon. Model weights already at:
-    #   Kokoro-FastAPI/api/src/models/v1_0/
+    # MPS-accelerated on Apple Silicon.
     # useModelName rewrites "kokoro-tts" → "kokoro" which the server expects.
     #
     # Usage:  POST http://localhost:8080/v1/audio/speech
     #   { "model": "kokoro-tts", "input": "Hello!", "voice": "af_heart" }
-    #
-    # ── Available voices ────────────────────────────────────────────────────
-    # American English (af_* / am_*)
-    #   af_heart ⭐  af_bella  af_aoede  af_jessica  af_kore  af_nicole
-    #   af_nova   af_river  af_sarah  af_sky
-    #   am_adam   am_echo   am_eric   am_fenrir   am_liam   am_michael
-    #   am_onyx   am_puck
-    # British English (bf_* / bm_*)
-    #   bf_alice  bf_emma   bf_lily   bf_v0isabella  (note: not "bf_isabella")
-    #   bm_daniel bm_fable  bm_george bm_lewis
-    # Other languages
-    #   ff_siwis (French)   ef_dora / em_alex (Spanish)
-    #   if_sara / im_nicola (Italian)   hf_alpha / hm_omega (Hindi)
-    #   jf_alpha / jm_kumo (Japanese)   zf_xiaoxiao / zm_yunxi (Chinese)
-    #   pf_dora / pm_alex (Portuguese)
-    # ────────────────────────────────────────────────────────────────────────
-    # Web UI: http://localhost:8080/upstream/kokoro-tts/web
     kokoro-tts:
         cmd: /Users/andermurias/AI/scripts/start-kokoro.sh ${PORT}
         useModelName: "kokoro"
         checkEndpoint: /health
         ttl: 120
+
     # ── TTS · Orpheus — Spanish/Italian Natural Voice ────────────────────────
     # Llama-3B based TTS model fine-tuned for Spanish/Italian.
-    # Produces the most natural-sounding speech of any open TTS model.
     # Architecture: llama-server (token gen, Metal-accelerated) + Orpheus-FastAPI
     # (SNAC codec decoder + OpenAI-compatible HTTP API).
-    #
-    # TTL 300s: model takes ~30s to start (loads llama-server + SNAC weights),
-    # so we keep it alive longer to avoid paying startup cost on every request.
     #
     # Voices: javi (male warm), sergio (male professional), maria (female friendly)
     # API:  POST http://localhost:8080/v1/audio/speech
@@ -312,140 +175,15 @@ models:
         cmd: /Users/andermurias/AI/scripts/start-orpheus.sh ${PORT}
         checkEndpoint: /openapi.json
         ttl: 300
+
     # ── TTS · XTTS v2 — Multilingual, Spanish-focused ────────────────────────
     # Coqui XTTS v2 — 17-language multilingual TTS with 50+ built-in speakers.
     # Best for Spanish. Supports voice cloning via reference.wav (voice: "custom").
     #
-    # TTL 180s: ~15s load time (downloads model weights to ~/.local/share/tts on
-    # first run). Longer than Kokoro; shorter than Orpheus.
-    #
-    # Voices: Marcos Rudaski (male), Uta Obando (female), Alma María, and more.
     # API:  POST http://localhost:8080/v1/audio/speech
     #   { "model": "xtts-tts", "input": "...", "voice": "Marcos Rudaski" }
     #   { "model": "xtts-tts", "input": "...", "voice": "custom" }  ← clones ~/AI/reference.wav
-    #   Optional: "language": "es" (default) | "en" | "fr" | "de" | "pt" | ...
     xtts-tts:
         cmd: /Users/andermurias/AI/scripts/start-xtts.sh ${PORT}
         checkEndpoint: /health
         ttl: 180
-
-    # ── Chat · MLX — Gemma 3 12B QAT (Quantization-Aware Training) ──────────
-    # Same architecture as gemma-3-12b-it but trained with QAT — better quality
-    # at 4-bit than post-training quantization. Recommended daily driver.
-    gemma-3-12b-it-qat-mlx:
-        cmd: |-
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/gemma-3-12b-it-qat-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 32768
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 3221225472
-        useModelName: "mlx-community/gemma-3-12b-it-qat-4bit"
-        checkEndpoint: "/health"
-        concurrencyLimit: 1
-        ttl: 120
-    # ── Chat · MLX — Gemma 4 E4B 6-bit (Effective 4B, 256K context) ─────────
-    # Google Gemma 4 E4B: small 4B dense model with 256K context window.
-    # Fastest Gemma variant — great for low-latency chat and tool calling.
-    # 6-bit quantization: better quality than 4-bit with minimal RAM overhead (~3.5 GB).
-    gemma-4-e4b-it-6bit-mlx:
-        cmd: |-
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/gemma-4-e4b-it-6bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 32768
-            --prefill-step-size 512
-            --prompt-cache-size 3
-            --prompt-cache-bytes 4294967296
-        useModelName: "mlx-community/gemma-4-e4b-it-6bit"
-        checkEndpoint: "/health"
-        concurrencyLimit: 1
-        ttl: 180
-    # ── Chat · GGUF — Gemma 4 E4B Q4_K_M (llama.cpp) ───────────────────────
-    # Same model via llama.cpp — useful for comparing performance vs MLX.
-    # Q4_K_M: excellent quality/speed tradeoff at ~2.5 GB.
-    # -ngl 99: all layers on GPU (Metal).
-    gemma-4-e4b-it-gguf:
-        cmd: |-
-            llama-server
-            --model /Users/andermurias/AI/models/chat/google_gemma-4-E4B-it-Q4_K_M.gguf
-            --alias gemma-4-e4b-it-gguf
-            --host 127.0.0.1
-            --port ${PORT}
-            -ngl 99
-            --ctx-size 32768
-            --parallel 1
-            --ubatch-size 512
-            --log-file /Users/andermurias/AI/logs/gemma-4-e4b-it-gguf.log
-        useModelName: "gemma-4-e4b-it-gguf"
-        checkEndpoint: "/v1/models"
-        concurrencyLimit: 1
-        ttl: 180
-    gemma-3-12b-it-mlx:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/gemma-3-12b-it-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 32768
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 3221225472
-        useModelName: "mlx-community/gemma-3-12b-it-4bit"
-        ttl: 120
-
-    # ── New LLMs · 2025 additions ───────────────────────────────────────────────
-
-    # Fast coding / reasoning · DeepSeek-R1 distilled on Llama-8B
-    # ~4.5 GB, ~20–25 tok/s. Shows <think> reasoning chain.
-    deepseek-r1-llama-8b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit"
-        ttl: 300
-
-    # High-quality 9B · mixed-precision (sensitive layers 8-bit)
-    # ~6 GB, better quality than uniform 4-bit. Replaces existing qwen3.5-9b.
-    qwen3.5-9b-optiq:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen3.5-9B-OptiQ-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/Qwen3.5-9B-OptiQ-4bit"
-        ttl: 300
-
-    # Larger model · Qwen3-14B dense
-    # ~8.3 GB, best for complex tasks when speed is less critical.
-    qwen3-14b:
-        cmd: |
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model mlx-community/Qwen3-14B-4bit
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 16384
-            --prefill-step-size 512
-            --prompt-cache-size 2
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/Qwen3-14B-4bit"
-        ttl: 300
