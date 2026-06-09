@@ -15,7 +15,9 @@
 # • ttl           — idle timeout in seconds before the model process is unloaded
 #
 # ── Context / parallelism ────────────────────────────────────────────────────
-#   --parallel 1 (llama.cpp) gives the full ctx-size to every single request.
+#   --parallel 3 (llama.cpp) allows 3 concurrent requests, each getting ctx-size/3.
+#   concurrencyLimit: 3 on llama-swap allows 3 requests in flight simultaneously.
+#   This is needed for OpenWebUI sub-agents that issue concurrent requests.
 
 # yaml-language-server: $schema=https://raw.githubusercontent.com/mostlygeek/llama-swap/refs/heads/main/config-schema.json
 
@@ -68,9 +70,10 @@ models:
             --port ${PORT}
             -ngl 99
             --ctx-size 32768
-            --parallel 1
+            --parallel 3
             --log-file /Users/andermurias/AI/logs/inference.log
         useModelName: "gemma-3-12b-it"
+        concurrencyLimit: 3
         ttl: 300
 
     # ── TTS · Voxtral 4B (pure C, Apple Accelerate) ─────────────────────────
@@ -96,10 +99,11 @@ models:
             --ctx-size 2048
             --batch-size 2048
             --ubatch-size 2048
-            --parallel 1
+            --parallel 3
             --embedding
             --log-file /Users/andermurias/AI/logs/embeddings.log
         useModelName: "nomic-embed-text-v1.5"
+        concurrencyLimit: 3
         ttl: 60
     # ── Reasoning & chat · MLX — Qwen 3.5 9B ────────────────────────────────
     # Latest Qwen generation (2025). Built-in chain-of-thought via /think token.
@@ -111,7 +115,7 @@ models:
     # LRUPromptCache default = 10 entries, no byte limit → OOM over time.
     #
     # Fixes applied:
-    #   --prompt-cache-size 2     keep at most 2 conversation KV caches
+    #   --prompt-cache-size 3     keep at most 3 conversation KV caches (one per concurrent request)
     #   --prompt-cache-bytes 3G   hard cap on total cached KV bytes
     #   --max-tokens 16384        limit thinking budget (32K was excessive)
     #   ttl: 120                  kill idle process after 2 min; Metal memory
@@ -125,10 +129,10 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/Qwen3.5-9B-MLX-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Fast · MLX — Qwen 2.5 3B (small, 128 k context) ─────────────────────
     # ~2 GB, loads in seconds, native 128 k token window.
@@ -160,21 +164,18 @@ models:
             --log-level WARNING
             --max-tokens 65536
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 4294967296
         useModelName: "mlx-community/Qwen2.5-7B-Instruct-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Coding · MLX — Qwen 2.5 Coder 14B ───────────────────────────────────
     # Best coding model that fits in 16 GB. Fine-tuned on code: fill-in-middle,
     # multi-file edits, repo-level context.
     # max-tokens 16384 supports generating full source files.
-    # concurrencyLimit 1: prevents two concurrent requests from doubling KV cache
-    #   RAM usage and causing OOM (→ 502). On 16 GB: 8.3 GB weights + KV cache
-    #   leaves ~5 GB; a second concurrent request would exceed available RAM.
+    # concurrencyLimit 3: allows OpenWebUI sub-agents to run 3 concurrent requests.
+    # prompt-cache-size 3: one cache slot per concurrent request.
     # prefill-step-size 256: half-sized chunks reduce peak RAM per step.
-    # prompt-cache-size 1: keep only 1 cached KV state; evicts old caches to
-    #   free RAM for the current large request.
     # HF repo: mlx-community/Qwen2.5-Coder-14B-Instruct-4bit  (~8.3 GB)
     qwen2.5-coder-14b:
         cmd: |
@@ -185,15 +186,15 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 256
-            --prompt-cache-size 1
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/Qwen2.5-Coder-14B-Instruct-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Agent / instructions · MLX — Qwen 2.5 14B ────────────────────────────
     # Optimised for tool calling, function calling, MCP agents, and complex
     # system-prompt following. max-tokens 16384 for long tool-call chains.
-    # concurrencyLimit 1 + prefill-step-size 256: OOM protection (see coder-14b).
+    # concurrencyLimit 3 + prefill-step-size 256: allow 3 concurrent requests.
     # HF repo: mlx-community/Qwen2.5-14B-Instruct-4bit  (~8.3 GB)
     qwen2.5-14b:
         cmd: |
@@ -204,14 +205,14 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 256
-            --prompt-cache-size 1
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/Qwen2.5-14B-Instruct-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Alternative · MLX — Microsoft Phi-4 14B ──────────────────────────────
     # 14 B at 4-bit ≈ 8 GB; strong on STEM, reasoning and coding.
-    # concurrencyLimit 1 + prefill-step-size 256: OOM protection (see coder-14b).
+    # concurrencyLimit 3 + prefill-step-size 256: allow 3 concurrent requests.
     # HF repo: mlx-community/phi-4-4bit
     phi-4:
         cmd: |
@@ -222,10 +223,10 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 256
-            --prompt-cache-size 1
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/phi-4-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Web search / RAG · MLX — Mistral Nemo 12B ────────────────────────────
     # Designed for RAG, web search synthesis and multilingual responses.
@@ -244,10 +245,10 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/Mistral-Nemo-Instruct-2407-4bit"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── STT — Whisper large-v3-turbo (OpenAI-compatible transcription) ─────────
     # Metal-accelerated speech-to-text using mlx-whisper.
@@ -342,11 +343,11 @@ models:
             --log-level WARNING
             --max-tokens 32768
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/gemma-3-12b-it-qat-4bit"
         checkEndpoint: "/health"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 120
     # ── Chat · MLX — Gemma 4 E4B 6-bit (Effective 4B, 256K context) ─────────
     # Google Gemma 4 E4B: small 4B dense model with 256K context window.
@@ -365,7 +366,7 @@ models:
             --prompt-cache-bytes 4294967296
         useModelName: "mlx-community/gemma-4-e4b-it-6bit"
         checkEndpoint: "/health"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 180
     # ── Chat · GGUF — Gemma 4 E4B Q4_K_M (llama.cpp) ───────────────────────
     # Same model via llama.cpp — useful for comparing performance vs MLX.
@@ -380,12 +381,12 @@ models:
             --port ${PORT}
             -ngl 99
             --ctx-size 32768
-            --parallel 1
+            --parallel 3
             --ubatch-size 512
             --log-file /Users/andermurias/AI/logs/gemma-4-e4b-it-gguf.log
         useModelName: "gemma-4-e4b-it-gguf"
         checkEndpoint: "/v1/models"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 180
     gemma-3-12b-it-mlx:
         cmd: |
@@ -396,7 +397,7 @@ models:
             --log-level WARNING
             --max-tokens 32768
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 3221225472
         useModelName: "mlx-community/gemma-3-12b-it-4bit"
         ttl: 120
@@ -413,11 +414,11 @@ models:
             --log-level WARNING
             --max-tokens 32768
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 4294967296
         useModelName: "mlx-community/gemma-4-12b-it-4bit"
         checkEndpoint: "/health"
-        concurrencyLimit: 1
+        concurrencyLimit: 3
         ttl: 180
 
     # ── New LLMs · 2025 additions ───────────────────────────────────────────────
@@ -433,9 +434,10 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit"
+        concurrencyLimit: 3
         ttl: 300
 
     # High-quality 9B · mixed-precision (sensitive layers 8-bit)
@@ -449,9 +451,10 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/Qwen3.5-9B-OptiQ-4bit"
+        concurrencyLimit: 3
         ttl: 300
 
     # Larger model · Qwen3-14B dense
@@ -465,7 +468,8 @@ models:
             --log-level WARNING
             --max-tokens 16384
             --prefill-step-size 512
-            --prompt-cache-size 2
+            --prompt-cache-size 3
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/Qwen3-14B-4bit"
+        concurrencyLimit: 3
         ttl: 300
