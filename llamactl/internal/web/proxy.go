@@ -49,7 +49,7 @@ func (s *Server) handleAIProxy(w http.ResponseWriter, r *http.Request) {
 	if port == "" {
 		port = "8080"
 	}
-	targetURL, err := url.Parse("http://localhost:" + port)
+	targetURL, err := url.Parse("http://127.0.0.1:" + port)
 	if err != nil {
 		http.Error(w, "proxy misconfigured", http.StatusInternalServerError)
 		return
