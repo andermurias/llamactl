@@ -54,7 +54,6 @@ groups:
             - gemma-4-e4b-it-6bit-mlx
             - gemma-4-e4b-it-gguf
             # - gemma-3-12b-it-mlx  # disabled: not in local cache
-            - gemma-4-12b-it
             # ── New LLMs · 2025 ───────────────────────────────────────────────────────
             # - deepseek-r1-llama-8b  # disabled: not in local cache
             # - qwen3.5-9b-optiq  # disabled: not in local cache
@@ -402,25 +401,6 @@ models:
             --prompt-cache-bytes 2147483648
         useModelName: "mlx-community/gemma-3-12b-it-4bit"
         ttl: 120
-
-    # ── Chat · MLX — Gemma 4 12B 4-bit ──────────────────────────────────────
-    # ~8 GB at 4-bit. Strong general-purpose model with good quality/speed.
-    # HF repo: mlx-community/gemma-4-12b-it-4bit
-    gemma-4-12b-it:
-        cmd: |-
-            /opt/homebrew/Caskroom/miniforge/base/envs/mlx-server/bin/mlx_lm.server
-            --model /Users/andermurias/.cache/huggingface/hub/models--mlx-community--gemma-4-12b-it-4bit/snapshots/73bcf09092aa277861d5a191b989b666f7f32e8f
-            --host 127.0.0.1
-            --port ${PORT}
-            --log-level WARNING
-            --max-tokens 32768
-            --prefill-step-size 512
-            --prompt-cache-size 1
-            --prompt-cache-bytes 2147483648
-        useModelName: "mlx-community/gemma-4-12b-it-4bit"
-        checkEndpoint: "/health"
-        concurrencyLimit: 1
-        ttl: 3600
 
     # ── New LLMs · 2025 additions ───────────────────────────────────────────────
 
